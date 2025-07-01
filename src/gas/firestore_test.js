@@ -1,6 +1,6 @@
 function testFirestoreWrite() {
   const API_KEY = PropertiesService.getScriptProperties().getProperty('FIREBASE_API_KEY');
-  const PROJECT_ID = 'egg-pe-liff-app'; // ここにあなたのFirebaseプロジェクトIDを記述
+  const PROJECT_ID = PropertiesService.getScriptProperties().getProperty('FIREBASE_PROJECT_ID');
   const COLLECTION_NAME = 'test_collection'; // テスト用のコレクション名
 
   const FIRESTORE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/${COLLECTION_NAME}?key=${API_KEY}`;

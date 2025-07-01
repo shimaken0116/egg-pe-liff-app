@@ -111,7 +111,7 @@ function saveFormDataToFirestore(formData) {
   const API_KEY = PropertiesService.getScriptProperties().getProperty('FIREBASE_API_KEY');
   // TODO: ここにあなたのFirebaseプロジェクトIDを記述してください。
   // 例: const PROJECT_ID = 'your-firebase-project-id';
-  const PROJECT_ID = 'YOUR_FIREBASE_PROJECT_ID'; 
+  const PROJECT_ID = PropertiesService.getScriptProperties().getProperty('FIREBASE_PROJECT_ID'); 
   const COLLECTION_NAME = 'formSubmissions'; // Firestoreに保存するコレクション名
 
   const FIRESTORE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/${COLLECTION_NAME}?key=${API_KEY}`;

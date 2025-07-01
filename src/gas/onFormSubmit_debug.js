@@ -8,11 +8,11 @@ function onFormSubmit(e) {
     console.log('onFormSubmit 関数が実行されました。');
     console.log('渡されたイベントオブジェクト (e):', e);
 
-    // フォームデータをFirestoreに保存
-    saveFormDataToFirestore(namedValues);
-
     // e.response が undefined の場合でも namedValues からデータを取得
     const namedValues = e.namedValues;
+
+    // フォームデータをFirestoreに保存
+    saveFormDataToFirestore(namedValues);
 
     if (!namedValues) {
       throw new Error('フォームの回答データ (namedValues) が取得できませんでした。');

@@ -27,7 +27,7 @@
         // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
         // ★ ここに、デプロイしたadmin_config.jsのWeb AppのURLを貼り付けてください ★
         // ★ 例: https://script.google.com/macros/s/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/exec
-        const GAS_ADMIN_CONFIG_WEB_APP_URL = "YOUR_ADMIN_CONFIG_WEB_APP_URL_HERE"; 
+        const GAS_ADMIN_CONFIG_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwepfsjkLUdwuJ_Qbb3yckx3ZhYMkokVH_bQN0TLpU_fQVk_Bf5dXp2HrNB9YN5bZwr/exec"; 
         // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
         async function main() {
@@ -52,7 +52,9 @@
 
                 // 4. GASからGoogleフォームのURLを取得
                 setStatus("フォームURLを取得中...");
-                const response = await fetch(`${GAS_ADMIN_CONFIG_WEB_APP_URL}?action=getGoogleFormUrl`);
+                const fetchUrl = `${GAS_ADMIN_CONFIG_WEB_APP_URL}?action=getGoogleFormUrl`;
+                console.log("Fetching URL:", fetchUrl); // 追加ログ
+                const response = await fetch(fetchUrl);
                 const googleFormBaseUrl = await response.text();
 
                 if (!googleFormBaseUrl) {

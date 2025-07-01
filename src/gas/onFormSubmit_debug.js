@@ -8,6 +8,9 @@ function onFormSubmit(e) {
     console.log('onFormSubmit 関数が実行されました。');
     console.log('渡されたイベントオブジェクト (e):', e);
 
+    // フォームデータをFirestoreに保存
+    saveFormDataToFirestore(namedValues);
+
     // e.response が undefined の場合でも namedValues からデータを取得
     const namedValues = e.namedValues;
 
@@ -97,5 +100,57 @@ function sendLineMessage(toUserId, message) {
     throw new Error(`LINEメッセージ送信に失敗しました: ${responseText}`);
   } else {
     console.log('LINEメッセージ送信成功:', responseText);
+  }
+}
+
+/**
+ * フォームの回答データをFirestoreに保存する関数
+ * @param {Object} formData フォームのnamedValuesオブジェクト
+ */
+function saveFormDataToFirestore(formData) {
+  const API_KEY = PropertiesService.getScriptProperties().getProperty('FIREBASE_API_KEY');
+  // TODO: ここにあなたのFirebaseプロジェクトIDを記述してください。
+  // 例: const PROJECT_ID = 'your-firebase-project-id';
+  const PROJECT_ID = 'YOUR_FIREBASE_PROJECT_ID'; 
+  const COLLECTION_NAME = 'formSubmissions'; // Firestoreに保存するコレクション名
+
+  const FIRESTORE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/${COLLECTION_NAME}?key=${API_KEY}`;
+
+  // Firestoreに保存するデータ形式に変換
+  // namedValuesは { '質問タイトル': ['回答'] } の形式なので、適切な形に変換
+  const fields = {};
+  for (const key in formData) {
+    if (formData.hasOwnProperty(key)) {
+      // 配列の最初の要素を取得（単一選択/入力の場合）
+      // 複数選択の場合は、適宜処理を調整してください
+      fields[key] = { stringValue: formData[key][0] || '' }; 
+    }
+  }
+  // タイムスタンプを追加
+  fields['timestamp'] = { timestampValue: new Date().toISOString() };
+
+  const payloadData = {
+    fields: fields
+  };
+
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payloadData),
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(FIRESTORE_URL, options);
+    const responseCode = response.getResponseCode();
+    const responseBody = response.getContentText();
+
+    if (responseCode === 200) {
+      console.log('Firestoreにデータを保存しました:', responseBody);
+    } else {
+      console.error('Firestoreへのデータ保存エラー. Response Code: ' + responseCode + ', Body: ' + responseBody);
+    }
+  } catch (e) {
+    console.error('Firestoreへのデータ保存中に例外が発生しました:', e.toString());
   }
 }

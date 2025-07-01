@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PROGRAM EGG 申込受付</title>
+    <title>PROGRAM EGG 申込フォームへ</title>
     <style>
         body { font-family: sans-serif; text-align: center; padding-top: 50px; }
         #status { font-weight: bold; }
@@ -12,8 +12,8 @@
     </style>
 </head>
 <body>
-    <h1>ユーザー情報送信中...</h1>
-    <p>ステータス: <span id="status">初期化しています...</span></p>
+    <h1>申込フォームへ移動中...</h1>
+    <p>ステータス: <span id="status">LIFFを初期化中...</span></p>
 
     <!-- LIFF SDK -->
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -24,66 +24,77 @@
         const LIFF_ID = "2007669947-nZxWXAbN"; 
         // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
+        // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        // ★ ここに、Googleフォームの事前入力用URLのベースを貼り付けてください ★
+        // ★ 例: https://docs.google.com/forms/d/e/1FAIpQLScVoQqGe-akSvFiKtg6CcPFGLO06GSu4naiwFSIL5HjOi3cBw/viewform?usp=pp_url&entry.2044946577= 
+        const GOOGLE_FORM_BASE_URL = "https://docs.google.com/forms/d/e/1FAIpQLScVoQqGe-akSvFiKtg6CcPFGLO06GSu4naiwFSIL5HjOi3cBw/viewform?usp=pp_url&entry.2044946577=";
+        // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+
         async function main() {
             try {
                 // 1. LIFFの初期化
-                document.getElementById('status').textContent = "LIFFを初期化中...";
+                setStatus("LIFFを初期化中...");
                 await liff.init({ liffId: LIFF_ID });
 
                 // 2. ログイン判定
                 if (!liff.isLoggedIn()) {
-                    document.getElementById('status').textContent = "ログインしていません。ログインページに移動します。";
-                    // ログインしていなければ、LINEのログイン画面にリダイレクト
+                    setStatus("ログインしていません。ログインページに移動します。");
                     liff.login();
                     return;
                 }
 
-                // 3. IDトークンの取得
-                document.getElementById('status').textContent = "IDトークンを取得中...";
+                // 3. IDトークンの取得とユーザーIDの抽出
+                setStatus("ユーザー情報を取得中...");
                 const idToken = liff.getIDToken();
                 if (!idToken) {
                     throw new Error("IDトークンが取得できませんでした。");
                 }
 
-                // 4. GASのWebアプリへIDトークンを送信
-                document.getElementById('status').textContent = "サーバーに情報を送信中...";
-                await sendIdTokenToGas(idToken);
+                // IDトークンからユーザーIDを抽出（GASを介さずLIFF側で直接行う）
+                // LIFF SDKのliff.getProfile()でも取得可能だが、IDトークンから直接抽出する方がシンプル
+                const decodedIdToken = parseJwt(idToken);
+                const userId = decodedIdToken.sub; // 'sub' クレームにユーザーIDが含まれる
 
-                // 5. 成功メッセージを表示
-                document.getElementById('status').textContent = "ユーザー情報の登録が完了しました！";
-                document.getElementById('status').classList.add('success');
-                document.querySelector('h1').textContent = "登録完了";
+                if (!userId) {
+                    throw new Error("ユーザーIDがIDトークンから取得できませんでした。");
+                }
 
+                // 4. GoogleフォームのURLを生成し、リダイレクト
+                setStatus("Googleフォームへ移動します...");
+                const formUrl = GOOGLE_FORM_BASE_URL + encodeURIComponent(userId);
+                liff.openWindow({
+                    url: formUrl,
+                    external: true // 外部ブラウザで開く
+                });
+
+                // LIFFアプリは閉じる
+                liff.closeWindow();
 
             } catch (error) {
                 console.error(error);
-                document.getElementById('status').textContent = `エラーが発生しました: ${error.message}`;
-                document.getElementById('status').classList.add('error');
-                document.querySelector('h1').textContent = "登録失敗";
+                setStatus(`エラーが発生しました: ${error.message}`, "error");
+                document.querySelector('h1').textContent = "エラー";
             }
         }
 
-        async function sendIdTokenToGas(idToken) {
-            // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-            // ★ ここに、GASをデプロイして取得したWebアプリのURLを貼り付けてください ★
-            const GAS_URL = "https://script.google.com/macros/s/AKfycbzxZLB6mP2FLPt38QNq_EhJyXah514Jt1yj5KGngmt5GyDUy6UGsHQb0l7XZ3NFcoLt/exec";
-            // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-
-            const response = await fetch(GAS_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'text/plain;charset=utf-8',
-                },
-                body: JSON.stringify({ idToken: idToken })
-            });
-
-            const result = await response.json();
-
-            if (result.status !== 'success') {
-                throw new Error(`サーバーでエラーが発生しました: ${result.message}`);
+        // JWT（IDトークン）をデコードするヘルパー関数
+        function parseJwt(token) {
+            try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                return JSON.parse(jsonPayload);
+            } catch (e) {
+                return null;
             }
-            
-            console.log("サーバーからの応答:", result);
+        }
+
+        function setStatus(message, type = '') {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = type; // 'success' or 'error'
         }
 
         // 処理を開始

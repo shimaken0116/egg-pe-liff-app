@@ -1,4 +1,60 @@
 /**
+ * フォームの回答データをFirestoreに保存する関数
+ * @param {Object} formData フォームのnamedValuesオブジェクト
+ */
+function saveFormDataToFirestore(formData) {
+  const API_KEY = PropertiesService.getScriptProperties().getProperty('FIREBASE_API_KEY');
+  const PROJECT_ID = PropertiesService.getScriptProperties().getProperty('FIREBASE_PROJECT_ID');
+  const COLLECTION_NAME = 'formSubmissions'; // Firestoreに保存するコレクション名
+
+  if (!API_KEY || !PROJECT_ID) {
+    console.error('Firebase API KeyまたはProject IDがスクリプトプロパティに設定されていません。');
+    return; // プロパティが不足している場合は処理を中断
+  }
+
+  const FIRESTORE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/${COLLECTION_NAME}?key=${API_KEY}`;
+  console.log('Firestoreへの保存を試行中。URL:', FIRESTORE_URL); // 追加ログ
+
+  // Firestoreに保存するデータ形式に変換
+  const fields = {};
+  for (const key in formData) {
+    if (formData.hasOwnProperty(key)) {
+      // namedValuesは { '質問タイトル': ['回答'] } の形式なので、適切な形に変換
+      // 配列の最初の要素を取得（単一選択/入力の場合）
+      // 複数選択の場合は、適宜処理を調整してください
+      fields[key] = { stringValue: formData[key][0] || '' }; 
+    }
+  }
+  // タイムスタンプを追加
+  fields['timestamp'] = { timestampValue: new Date().toISOString() };
+
+  const payloadData = {
+    fields: fields
+  };
+
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payloadData),
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(FIRESTORE_URL, options);
+    const responseCode = response.getResponseCode();
+    const responseBody = response.getContentText();
+
+    if (responseCode === 200) {
+      console.log('Firestoreにデータを保存しました:', responseBody);
+    } else {
+      console.error('Firestoreへのデータ保存エラー. Response Code: ' + responseCode + ', Body: ' + responseBody);
+    }
+  } catch (e) {
+    console.error('Firestoreへのデータ保存中に例外が発生しました:', e.toString());
+  }
+}
+
+/**
  * Googleフォームが送信されたときに実行される関数
  * この関数は、フォームの送信イベントに紐付けられます。
  * @param {GoogleAppsScript.Events.FormsOnFormSubmit} e
@@ -10,6 +66,9 @@ function onFormSubmit(e) {
 
     // e.response が undefined の場合でも namedValues からデータを取得
     const namedValues = e.namedValues;
+
+    // フォームデータをFirestoreに保存
+    saveFormDataToFirestore(namedValues);
 
     if (!namedValues) {
       throw new Error('フォームの回答データ (namedValues) が取得できませんでした。');
@@ -151,18 +210,22 @@ function sendLineMessage(toUserId, message) {
  */
 function saveFormDataToFirestore(formData) {
   const API_KEY = PropertiesService.getScriptProperties().getProperty('FIREBASE_API_KEY');
-  // TODO: ここにあなたのFirebaseプロジェクトIDを記述してください。
-  // 例: const PROJECT_ID = 'your-firebase-project-id';
-  const PROJECT_ID = PropertiesService.getScriptProperties().getProperty('FIREBASE_PROJECT_ID'); 
+  const PROJECT_ID = PropertiesService.getScriptProperties().getProperty('FIREBASE_PROJECT_ID');
   const COLLECTION_NAME = 'formSubmissions'; // Firestoreに保存するコレクション名
 
+  if (!API_KEY || !PROJECT_ID) {
+    console.error('Firebase API KeyまたはProject IDがスクリプトプロパティに設定されていません。');
+    return; // プロパティが不足している場合は処理を中断
+  }
+
   const FIRESTORE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/${COLLECTION_NAME}?key=${API_KEY}`;
+  console.log('Firestoreへの保存を試行中。URL:', FIRESTORE_URL); // 追加ログ
 
   // Firestoreに保存するデータ形式に変換
-  // namedValuesは { '質問タイトル': ['回答'] } の形式なので、適切な形に変換
   const fields = {};
   for (const key in formData) {
     if (formData.hasOwnProperty(key)) {
+      // namedValuesは { '質問タイトル': ['回答'] } の形式なので、適切な形に変換
       // 配列の最初の要素を取得（単一選択/入力の場合）
       // 複数選択の場合は、適宜処理を調整してください
       fields[key] = { stringValue: formData[key][0] || '' }; 

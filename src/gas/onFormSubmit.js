@@ -19,37 +19,37 @@ function onFormSubmit(e) {
     }
 
     let userId = null;
-    let lessonApplied = false;
+    let userName = 'お客様'; // デフォルト値
+    let lessonNames = [];
 
     // namedValues から LINEUserID を取得
-    // namedValues の値は配列なので、最初の要素を取得
     if (namedValues['LINEUserID'] && namedValues['LINEUserID'].length > 0) {
       userId = namedValues['LINEUserID'][0];
     }
 
-    // namedValues から「参加希望レッスン」の回答を取得
-    // ログから '参加希望レッスン': [ 'A Lesson' ] となっていたので、その値で判定
+    // namedValues から「氏名」を取得 (フォームの質問名に合わせてください)
+    if (namedValues['氏名'] && namedValues['氏名'].length > 0) {
+      userName = namedValues['氏名'][0];
+    }
+
+    // namedValues から「参加希望レッスン」を取得 (複数選択の可能性も考慮)
     if (namedValues['参加希望レッスン'] && namedValues['参加希望レッスン'].length > 0) {
-      const lessonAnswer = namedValues['参加希望レッスン'][0];
-      // ここは、Googleフォームで設定した「参加希望レッスン」の具体的な選択肢に合わせてください
-      // 例: チェックボックスで「はい、参加を希望します」という選択肢がある場合
-      if (lessonAnswer === 'A Lesson') { // ログの例に合わせて 'A Lesson' としています
-        lessonApplied = true;
-      }
+      lessonNames = namedValues['参加希望レッスン'];
     }
 
     if (!userId) {
       throw new Error('フォームの回答からLINE User IDが取得できませんでした。');
     }
 
-    // 月1特別レッスンに申し込んだ人にだけメッセージを送信する
-    if (lessonApplied) {
-      sendLineMessage(userId, '月1特別レッスンへのお申し込みありがとうございます！\n詳細が決まり次第、改めてご連絡いたします。');
+    let message = '';
+    if (lessonNames.length > 0) {
+      const lessonList = lessonNames.join('、');
+      message = `${userName}様、${lessonList}へのお申し込みありがとうございます！\n詳細が決まり次第、改めてご連絡いたします。`;
     } else {
-      console.log(`ユーザーID: ${userId} はレッスンに申し込んでいません。`);
-      // 必要であれば、別のメッセージを送る
-      // sendLineMessage(userId, 'お申し込みを受け付けました。');
+      message = `${userName}様、お申し込みありがとうございます！\n詳細が決まり次第、改めてご連絡いたします。`;
     }
+
+    sendLineMessage(userId, message);
 
   } catch (error) {
     console.error('フォーム送信処理中にエラーが発生しました:', error);

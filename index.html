@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html>Add commentMore actions
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -12,24 +12,8 @@
     </style>
 </head>
 <body>
-    <h1>レッスン申込フォーム</h1>
-    <form id="lessonForm">
-        <p>ステータス: <span id="status">LIFFを初期化中...</span></p>
-        <div>
-            <label for="userName">氏名:</label><br>
-            <input type="text" id="userName" name="氏名" required><br><br>
-        </div>
-        <div>
-            <label>参加希望レッスン:</label><br>
-            <input type="checkbox" id="lessonA" name="参加希望レッスン" value="A Lesson">
-            <label for="lessonA">A Lesson</label><br>
-            <input type="checkbox" id="lessonB" name="参加希望レッスン" value="B Lesson">
-            <label for="lessonB">B Lesson</label><br>
-            <input type="checkbox" id="lessonC" name="参加希望レッスン" value="C Lesson">
-            <label for="lessonC">C Lesson</label><br><br>
-        </div>
-        <button type="submit" id="submitButton" disabled>送信</button>
-    </form>
+    <h1>申込フォームへ移動中...</h1>
+    <p>ステータス: <span id="status">LIFFを初期化中...</span></p>
 
     <!-- LIFF SDK -->
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -41,21 +25,12 @@
         // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
         // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-        // ★ ここに、デプロイしたGAS Web AppのURLを貼り付けてください ★
-        // ★ 例: https://script.google.com/macros/s/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/exec
-        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzheyr2SHMFNt89R1PGwa0qS6vrHU3Fa0YEysOVnQwKwcPcP3Xi6Byf0jEPcy6J4qvr/exec"; 
+        // ★ ここに、Googleフォームの事前入力用URLのベースを貼り付けてください ★
+        // ★ 例: https://docs.google.com/forms/d/e/1FAIpQLScVoQqGe-akSvFiKtg6CcPFGLO06GSu4naiwFSIL5HjOi3cBw/viewform?usp=pp_url&entry.2044946577= 
+        const GOOGLE_FORM_BASE_URL = "https://docs.google.com/forms/d/e/1FAIpQLScVoQqGe-akSvFiKtg6CcPFGLO06GSu4naiwFSIL5HjOi3cBw/viewform?usp=pp_url&entry.2044946577=";
         // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
         async function main() {
-            const statusElement = document.getElementById('status');
-            const submitButton = document.getElementById('submitButton');
-            const lessonForm = document.getElementById('lessonForm');
-
-            function setStatus(message, type = '') {
-                statusElement.textContent = message;
-                statusElement.className = type;
-            }
-
             try {
                 // 1. LIFFの初期化
                 setStatus("LIFFを初期化中...");
@@ -68,71 +43,35 @@
                     return;
                 }
 
-                setStatus("LIFF初期化完了。フォームを入力してください。");
-                submitButton.disabled = false; // フォーム送信ボタンを有効化
+                // 3. IDトークンの取得
+                setStatus("ユーザー情報を取得中...");
+                const idToken = liff.getIDToken();
+                if (!idToken) {
+                    throw new Error("IDトークンが取得できませんでした。");
+                }
 
-                // フォーム送信イベントリスナー
-                lessonForm.addEventListener('submit', async (event) => {
-                    event.preventDefault(); // デフォルトのフォーム送信を防止
-
-                    setStatus("データを送信中...", '');
-                    submitButton.disabled = true; // 送信中はボタンを無効化
-
-                    try {
-                        const idToken = liff.getIDToken();
-                        if (!idToken) {
-                            throw new Error("IDトークンが取得できませんでした。");
-                        }
-
-                        // フォームデータを取得
-                        const formData = {};
-                        const userName = document.getElementById('userName').value;
-                        formData['氏名'] = userName;
-
-                        const selectedLessons = [];
-                        document.querySelectorAll('input[name="参加希望レッスン"]:checked').forEach(checkbox => {
-                            selectedLessons.push(checkbox.value);
-                        });
-                        formData['参加希望レッスン'] = selectedLessons;
-
-                        // GAS Web Appに送信するペイロードを作成
-                        const payload = {
-                            idToken: idToken,
-                            formData: formData
-                        };
-
-                        const response = await fetch(GAS_WEB_APP_URL, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify(payload)
-                        });
-
-                        const result = await response.json();
-
-                        if (result.status === 'success') {
-                            setStatus("申込が完了しました！", "success");
-                            // フォームをクリアするか、完了メッセージを表示するなど
-                            lessonForm.reset();
-                            submitButton.disabled = true; // 完了後は再度無効化
-                            liff.closeWindow(); // LIFFアプリを閉じる
-                        } else {
-                            throw new Error(result.message || '不明なエラーが発生しました。');
-                        }
-
-                    } catch (error) {
-                        console.error(error);
-                        setStatus(`送信エラー: ${error.message}`, "error");
-                        submitButton.disabled = false; // エラー時は再送信可能にする
-                    }
+                // 4. GoogleフォームのURLを生成し、リダイレクト
+                setStatus("Googleフォームへ移動します...");
+                const formUrl = GOOGLE_FORM_BASE_URL + encodeURIComponent(idToken);
+                liff.openWindow({
+                    url: formUrl,
+                    external: true // 外部ブラウザで開く
                 });
+
+                // LIFFアプリは閉じる
+                liff.closeWindow();
 
             } catch (error) {
                 console.error(error);
-                setStatus(`LIFF初期化エラー: ${error.message}`, "error");
-                submitButton.disabled = true;
+                setStatus(`エラーが発生しました: ${error.message}`, "error");
+                document.querySelector('h1').textContent = "エラー";
             }
+        }
+
+        function setStatus(message, type = '') {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = type; // 'success' or 'error'
         }
 
         // 処理を開始

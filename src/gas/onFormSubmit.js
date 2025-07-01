@@ -11,9 +11,6 @@ function onFormSubmit(e) {
     // e.response が undefined の場合でも namedValues からデータを取得
     const namedValues = e.namedValues;
 
-    // フォームデータをFirestoreに保存
-    saveFormDataToFirestore(namedValues);
-
     if (!namedValues) {
       throw new Error('フォームの回答データ (namedValues) が取得できませんでした。');
     }
@@ -22,9 +19,18 @@ function onFormSubmit(e) {
     let userName = 'お客様'; // デフォルト値
     let lessonNames = [];
 
-    // namedValues から LINEUserID を取得
-    if (namedValues['LINEUserID'] && namedValues['LINEUserID'].length > 0) {
-      userId = namedValues['LINEUserID'][0];
+    // namedValues から IDトークンを取得
+    // GoogleフォームでIDトークンを受け取る質問項目のタイトルに合わせてください
+    const idToken = namedValues['LINE ID Token'] && namedValues['LINE ID Token'].length > 0 ? namedValues['LINE ID Token'][0] : null;
+
+    if (!idToken) {
+      throw new Error('フォームの回答からIDトークンが取得できませんでした。');
+    }
+
+    // IDトークンの検証
+    userId = verifyIdToken(idToken);
+    if (!userId) {
+      throw new Error('IDトークンの検証に失敗し、ユーザーIDを特定できませんでした。');
     }
 
     // namedValues から「氏名」を取得 (フォームの質問名に合わせてください)
@@ -35,10 +41,6 @@ function onFormSubmit(e) {
     // namedValues から「参加希望レッスン」を取得 (複数選択の可能性も考慮)
     if (namedValues['参加希望レッスン'] && namedValues['参加希望レッスン'].length > 0) {
       lessonNames = namedValues['参加希望レッスン'];
-    }
-
-    if (!userId) {
-      throw new Error('フォームの回答からLINE User IDが取得できませんでした。');
     }
 
     let message = '';
@@ -54,6 +56,46 @@ function onFormSubmit(e) {
   } catch (error) {
     console.error('フォーム送信処理中にエラーが発生しました:', error);
     // エラー通知など、必要に応じて追加
+  }
+}
+
+/**
+ * LINEのIDトークンを検証する関数
+ * @param {string} idToken
+ * @returns {string|null} 検証成功時はユーザーID、失敗時はnull
+ */
+function verifyIdToken(idToken) {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const channelId = scriptProperties.getProperty('LINE_LOGIN_CHANNEL_ID'); // LIFFアプリのチャネルID
+
+  if (!channelId) {
+    console.error('スクリプトプロパティにLINE_LOGIN_CHANNEL_IDが設定されていません。');
+    return null;
+  }
+
+  const url = 'https://api.line.me/oauth2/v2.1/verify';
+  const options = {
+    method: 'post',
+    contentType: 'application/x-www-form-urlencoded',
+    payload: `id_token=${idToken}&client_id=${channelId}`,
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const responseCode = response.getResponseCode();
+    const responseBody = JSON.parse(response.getContentText());
+
+    if (responseCode === 200 && responseBody.sub) {
+      console.log('IDトークン検証成功:', responseBody);
+      return responseBody.sub; // 'sub'クレームにユーザーIDが含まれる
+    } else {
+      console.error('IDトークン検証失敗. Response Code:', responseCode, 'Body:', responseBody);
+      return null;
+    }
+  } catch (e) {
+    console.error('IDトークン検証中に例外が発生しました:', e.toString());
+    return null;
   }
 }
 
@@ -152,5 +194,51 @@ function saveFormDataToFirestore(formData) {
     }
   } catch (e) {
     console.error('Firestoreへのデータ保存中に例外が発生しました:', e.toString());
+  }
+}
+
+// sendLineMessage 関数はそのまま
+/**
+ * LINE Messaging APIを使ってメッセージを送信する関数
+ * @param {string} toUserId 送信先のLINEユーザーID
+ * @param {string} message 送信するメッセージ内容
+ */
+function sendLineMessage(toUserId, message) {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const channelAccessToken = scriptProperties.getProperty('LINE_CHANNEL_ACCESS_TOKEN');
+
+  if (!channelAccessToken) {
+    throw new Error('スクリプトプロパティにLINE_CHANNEL_ACCESS_TOKENが設定されていません。');
+  }
+
+  const url = 'https://api.line.me/v2/bot/message/push';
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer ' + channelAccessToken
+  };
+  const postData = {
+    to: toUserId,
+    messages: [{
+      type: 'text',
+      text: message
+    }]
+  };
+
+  const options = {
+    method: 'post',
+    headers: headers,
+    payload: JSON.stringify(postData),
+    muteHttpExceptions: true // エラー時も例外を投げずにレスポンスを返す
+  };
+
+  const response = UrlFetchApp.fetch(url, options);
+  const responseCode = response.getResponseCode();
+  const responseText = response.getContentText();
+
+  if (responseCode !== 200) {
+    console.error(`LINEメッセージ送信エラー: ${responseCode} - ${responseText}`);
+    throw new Error(`LINEメッセージ送信に失敗しました: ${responseText}`);
+  } else {
+    console.log('LINEメッセージ送信成功:', responseText);
   }
 }

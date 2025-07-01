@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PROGRAM EGG 申込受付</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding-top: 50px; }
+        #status { font-weight: bold; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>ユーザー情報送信中...</h1>
+    <p>ステータス: <span id="status">初期化しています...</span></p>
+
+    <!-- LIFF SDK -->
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+    <script>
+        // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        // ★ ここに、LINE Developersから取得したLIFF IDを貼り付けてください ★
+        const LIFF_ID = "YOUR_LIFF_ID"; 
+        // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+
+        async function main() {
+            try {
+                // 1. LIFFの初期化
+                document.getElementById('status').textContent = "LIFFを初期化中...";
+                await liff.init({ liffId: LIFF_ID });
+
+                // 2. ログイン判定
+                if (!liff.isLoggedIn()) {
+                    document.getElementById('status').textContent = "ログインしていません。ログインページに移動します。";
+                    // ログインしていなければ、LINEのログイン画面にリダイレクト
+                    liff.login();
+                    return;
+                }
+
+                // 3. IDトークンの取得
+                document.getElementById('status').textContent = "IDトークンを取得中...";
+                const idToken = liff.getIDToken();
+                if (!idToken) {
+                    throw new Error("IDトークンが取得できませんでした。");
+                }
+
+                // 4. GASのWebアプリへIDトークンを送信
+                document.getElementById('status').textContent = "サーバーに情報を送信中...";
+                await sendIdTokenToGas(idToken);
+
+                // 5. 成功メッセージを表示
+                document.getElementById('status').textContent = "ユーザー情報の登録が完了しました！";
+                document.getElementById('status').classList.add('success');
+                document.querySelector('h1').textContent = "登録完了";
+
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById('status').textContent = `エラーが発生しました: ${error.message}`;
+                document.getElementById('status').classList.add('error');
+                document.querySelector('h1').textContent = "登録失敗";
+            }
+        }
+
+        async function sendIdTokenToGas(idToken) {
+            // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+            // ★ ここに、GASをデプロイして取得したWebアプリのURLを貼り付けてください ★
+            const GAS_URL = "YOUR_GAS_WEB_APP_URL";
+            // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+
+            const response = await fetch(GAS_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'text/plain;charset=utf-8',
+                },
+                body: JSON.stringify({ idToken: idToken })
+            });
+
+            const result = await response.json();
+
+            if (result.status !== 'success') {
+                throw new Error(`サーバーでエラーが発生しました: ${result.message}`);
+            }
+            
+            console.log("サーバーからの応答:", result);
+        }
+
+        // 処理を開始
+        main();
+    </script>
+</body>
+</html>

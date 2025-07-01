@@ -25,9 +25,9 @@
         // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
         // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-        // ★ ここに、Googleフォームの事前入力用URLのベースを貼り付けてください ★
-        // ★ 例: https://docs.google.com/forms/d/e/1FAIpQLScVoQqGe-akSvFiKtg6CcPFGLO06GSu4naiwFSIL5HjOi3cBw/viewform?usp=pp_url&entry.2044946577= 
-        const GOOGLE_FORM_BASE_URL = "https://docs.google.com/forms/d/e/1FAIpQLScVoQqGe-akSvFiKtg6CcPFGLO06GSu4naiwFSIL5HjOi3cBw/viewform?usp=pp_url&entry.2044946577=";
+        // ★ ここに、デプロイしたadmin_config.jsのWeb AppのURLを貼り付けてください ★
+        // ★ 例: https://script.google.com/macros/s/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/exec
+        const GAS_ADMIN_CONFIG_WEB_APP_URL = "YOUR_ADMIN_CONFIG_WEB_APP_URL_HERE"; 
         // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
         async function main() {
@@ -50,9 +50,18 @@
                     throw new Error("IDトークンが取得できませんでした。");
                 }
 
-                // 4. GoogleフォームのURLを生成し、リダイレクト
+                // 4. GASからGoogleフォームのURLを取得
+                setStatus("フォームURLを取得中...");
+                const response = await fetch(`${GAS_ADMIN_CONFIG_WEB_APP_URL}?action=getGoogleFormUrl`);
+                const googleFormBaseUrl = await response.text();
+
+                if (!googleFormBaseUrl) {
+                    throw new Error("GoogleフォームのURLが設定されていません。管理者に連絡してください。");
+                }
+
+                // 5. GoogleフォームのURLを生成し、リダイレクト
                 setStatus("Googleフォームへ移動します...");
-                const formUrl = GOOGLE_FORM_BASE_URL + encodeURIComponent(idToken);
+                const formUrl = googleFormBaseUrl + encodeURIComponent(idToken);
                 liff.openWindow({
                     url: formUrl,
                     external: true // 外部ブラウザで開く

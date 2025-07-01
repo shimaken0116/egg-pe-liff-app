@@ -41,3 +41,11 @@
 
 ### 6. プロジェクトダッシュボードの作成
 - `docs/PROJECT_DASHBOARD.md` を作成し、プロジェクトの概要、現在の作業フォーカス、主要コンポーネント、最近の進捗、今後の課題と次のステップを記録。
+
+### 7. Googleフォーム再活用とFirestore保存の成功
+- Googleフォームを再活用する方針に決定。セキュリティリスクを理解した上で、利便性を優先。
+- `index.html` を修正し、LIFFアプリからGoogleフォームへIDトークン全体をURLパラメータとして渡すように変更。
+- `src/gas/onFormSubmit.js` にIDトークン検証ロジックを追加し、なりすまし防止を強化。
+- `src/gas/web_app.js` を削除（不要になったため）。
+- `src/gas/onFormSubmit.js` 内の`saveFormDataToFirestore`関数の定義位置を修正し、Firestoreへのデータ保存が正常に動作することを確認。
+- **システムテスト完了**: LINEメッセージ送信、Firestoreへのデータ保存が正常に行われることを確認済み。

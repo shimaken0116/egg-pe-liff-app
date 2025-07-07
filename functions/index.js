@@ -490,4 +490,36 @@ exports.onUserTagsUpdate = onDocumentUpdated(
     } else {
       await linkRichMenuToUser(userId, RICH_MENU_ID_NEW_USER);
     }
-  }); 
+  });
+
+/**
+ * 特定のユーザーの詳細情報を取得する
+ */
+exports.getUserDetails = onCall(
+  {
+    region: "asia-northeast1",
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    const { userId } = request.data;
+    if (!userId) {
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'userId'.");
+    }
+    try {
+      const userDoc = await db.collection("users").doc(userId).get();
+      if (!userDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "User not found.");
+      }
+      return { user: { id: userDoc.id, ...userDoc.data() } };
+    } catch (error) {
+      logger.error(`Failed to get user details for ${userId}`, error);
+      if (error instanceof functions.https.HttpsError) {
+        throw error;
+      }
+      throw new functions.https.HttpsError("internal", "Failed to get user details.", error);
+    }
+  }
+); 

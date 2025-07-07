@@ -99,8 +99,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         row.innerHTML = `
                             <td style="padding: 8px;">${user.displayName}</td>
                             <td style="padding: 8px;">${user.status}</td>
-                            <td style="padding: 8px;"><input type="text" class="tags-input" value="${user.tags ? user.tags.join(', ') : ''}" style="width: 95%;"></td>
-                            <td style="padding: 8px;"><button class="save-button" data-user-id="${user.id}">保存</button></td>
+                            <td style="padding: 8px;">${user.tags ? user.tags.join(', ') : '未設定'}</td>
+                            <td style="padding: 8px;"><button class="edit-user-button" data-user-id="${user.id}">編集</button></td>
                         `;
                     });
                     
@@ -137,20 +137,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // イベント委任で保存ボタンのクリックを処理
             contentArea.addEventListener('click', async (e) => {
-                if (e.target.classList.contains('save-button')) {
+                if (e.target.classList.contains('edit-user-button')) {
                     const userId = e.target.dataset.userId;
-                    const input = e.target.closest('tr').querySelector('.tags-input');
-                    const newTags = input.value.split(',').map(tag => tag.trim()).filter(tag => tag);
-                    
-                    userListResult.textContent = `ユーザーID: ${userId} のタグを更新中...`;
-                    const updateUserTags = functions.httpsCallable('updateUserTags');
-                    try {
-                        await updateUserTags({ userId: userId, tags: newTags });
-                        userListResult.textContent = `ユーザーID: ${userId} のタグを更新しました。`;
-                    } catch (error) {
-                        console.error('Update tags error:', error);
-                        userListResult.textContent = 'タグの更新に失敗しました: ' + error.message;
-                    }
+                    loadPage('user-detail', { userId });
                 }
             });
 
@@ -381,6 +370,109 @@ document.addEventListener('DOMContentLoaded', () => {
             // fetchTags();
         };
 
+        /**
+         * ユーザー詳細ページの処理
+         */
+        const initUserDetailPage = (params) => {
+            const userId = params.userId;
+            if (!userId) {
+                contentArea.innerHTML = '<p style="color: red;">ユーザーIDが指定されていません。</p>';
+                return;
+            }
+
+            const functions = firebase.app().functions('asia-northeast1');
+
+            // DOM要素
+            const userDisplayName = document.getElementById('userDisplayName');
+            const tagsCheckboxContainer = document.getElementById('tags-checkbox-container');
+            const saveUserTagsButton = document.getElementById('saveUserTagsButton');
+            const saveResult = document.getElementById('saveResult');
+            
+            // データの取得
+            const fetchData = async () => {
+                try {
+                    // ユーザー情報と全タグを並行して取得
+                    const getUserDetails = functions.httpsCallable('getUserDetails');
+                    const getTags = functions.httpsCallable('getTags');
+
+                    const [userResult, tagsResult] = await Promise.all([
+                        getUserDetails({ userId }),
+                        getTags()
+                    ]);
+
+                    const user = userResult.data.user;
+                    const allTags = tagsResult.data.tags;
+
+                    // 画面に描画
+                    renderPage(user, allTags);
+
+                } catch (error) {
+                    console.error('Failed to fetch data for user detail page:', error);
+                    contentArea.innerHTML = `<p style="color: red;">データの読み込みに失敗しました: ${error.message}</p>`;
+                }
+            };
+            
+            // 画面の描画
+            const renderPage = (user, allTags) => {
+                userDisplayName.textContent = user.displayName;
+                tagsCheckboxContainer.innerHTML = ''; // コンテナをクリア
+                
+                const userTags = user.tags || [];
+
+                const groupedTags = allTags.reduce((acc, tag) => {
+                    const category = tag.category || '未分類';
+                    if (!acc[category]) {
+                        acc[category] = [];
+                    }
+                    acc[category].push(tag);
+                    return acc;
+                }, {});
+
+                for (const category in groupedTags) {
+                    const groupDiv = document.createElement('div');
+                    groupDiv.className = 'tag-category-group';
+                    let innerHTML = `<h3>${category}</h3><div class="tag-checkbox-list">`;
+
+                    groupedTags[category].forEach(tag => {
+                        const isChecked = userTags.includes(tag.name);
+                        innerHTML += `
+                            <div class="tag-checkbox-item">
+                                <input type="checkbox" id="tag-${tag.id}" value="${tag.name}" ${isChecked ? 'checked' : ''}>
+                                <label for="tag-${tag.id}">${tag.name}</label>
+                            </div>
+                        `;
+                    });
+
+                    innerHTML += `</div>`;
+                    groupDiv.innerHTML = innerHTML;
+                    tagsCheckboxContainer.appendChild(groupDiv);
+                }
+            };
+
+            // 保存処理
+            saveUserTagsButton.addEventListener('click', async () => {
+                const selectedTags = [];
+                tagsCheckboxContainer.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
+                    selectedTags.push(checkbox.value);
+                });
+
+                saveResult.textContent = '保存中...';
+                const updateUserTags = functions.httpsCallable('updateUserTags');
+                try {
+                    await updateUserTags({ userId, tags: selectedTags });
+                    saveResult.textContent = 'タグを保存しました。';
+                    saveResult.style.color = 'green';
+                } catch (error) {
+                    console.error('Failed to save user tags:', error);
+                    saveResult.textContent = `保存に失敗しました: ${error.message}`;
+                    saveResult.style.color = 'red';
+                }
+            });
+
+            // 初期データ取得
+            fetchData();
+        };
+
         // =================================================================
         // ページの動的読み込み
         // =================================================================
@@ -389,14 +481,15 @@ document.addEventListener('DOMContentLoaded', () => {
             'submissions': initSubmissionsPage,
             'messaging': initMessagingPage,
             'tags': initTagsPage,
+            'user-detail': initUserDetailPage,
         };
         
         let currentPage = '';
         const eventListeners = new AbortController(); // イベントリスナーを管理
 
-        const loadPage = async (page) => {
-            if (currentPage === page) return; // 同じページは再読み込みしない
-            currentPage = page;
+        const loadPage = async (page, params = {}) => {
+            // currentPageの比較ロジックを削除し、常にページを読み込むようにする
+            // currentPage = page;
 
             try {
                 const response = await fetch(`pages/${page}.html`);
@@ -404,9 +497,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 contentArea.innerHTML = await response.text();
 
-                // ページに対応する初期化関数を実行
+                // ページに対応する初期化関数を実行 (パラメータを渡す)
                 if (pageInitializers[page]) {
-                    pageInitializers[page]();
+                    pageInitializers[page](params);
                 }
 
             } catch (error) {
@@ -422,6 +515,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 globalNav.querySelectorAll('a').forEach(a => a.classList.remove('active'));
                 e.target.classList.add('active');
+            }
+        });
+
+        // 「一覧に戻る」ボタンなどの動的な要素に対応するためのイベントリスナー
+        contentArea.addEventListener('click', (e) => {
+            if (e.target.id === 'backToListButton') {
+                loadPage('users');
+                // サイドバーのメニューもアクティブにする
+                globalNav.querySelectorAll('a').forEach(a => a.classList.remove('active'));
+                globalNav.querySelector('a[data-page="users"]').classList.add('active');
             }
         });
 

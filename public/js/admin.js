@@ -241,6 +241,146 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         };
 
+        /**
+         * タグ管理ページの処理
+         */
+        const initTagsPage = () => {
+            const createTagButton = document.getElementById('createTagButton');
+            const newTagName = document.getElementById('newTagName');
+            const newTagCategory = document.getElementById('newTagCategory');
+            const createTagResult = document.getElementById('createTagResult');
+            const tagsListContainer = document.getElementById('tags-list-container');
+            const tagListResult = document.getElementById('tagListResult');
+            const reloadTagsButton = document.getElementById('reloadTagsButton');
+
+            const functions = firebase.app().functions('asia-northeast1');
+
+            // タグのレンダリング
+            const renderTags = (tags) => {
+                // h3以外の要素をクリア
+                const header = tagsListContainer.querySelector('h3');
+                tagsListContainer.innerHTML = '';
+                tagsListContainer.appendChild(header);
+                
+                if (tags.length === 0) {
+                    tagsListContainer.insertAdjacentHTML('beforeend', '<p>タグはまだ作成されていません。</p>');
+                    return;
+                }
+                
+                const groupedTags = tags.reduce((acc, tag) => {
+                    const category = tag.category || '未分類';
+                    if (!acc[category]) {
+                        acc[category] = [];
+                    }
+                    acc[category].push(tag);
+                    return acc;
+                }, {});
+
+                for (const category in groupedTags) {
+                    const groupDiv = document.createElement('div');
+                    groupDiv.className = 'tag-group';
+                    
+                    let tagsHtml = `<h3>${category}</h3>`;
+                    groupedTags[category].forEach(tag => {
+                        tagsHtml += `
+                            <div class="tag-item" data-tag-id="${tag.id}">
+                                <span>${tag.name}</span>
+                                <div class="tag-actions">
+                                    <button class="edit-tag-button">編集</button>
+                                    <button class="delete-tag-button">削除</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    groupDiv.innerHTML = tagsHtml;
+                    tagsListContainer.appendChild(groupDiv);
+                }
+            };
+
+            // タグの取得
+            const fetchTags = async () => {
+                tagListResult.textContent = 'タグを取得中...';
+                const getTags = functions.httpsCallable('getTags');
+                try {
+                    const result = await getTags();
+                    renderTags(result.data.tags);
+                    tagListResult.textContent = 'タグの読み込みが完了しました。';
+                } catch (error) {
+                    console.error('Fetch tags error:', error);
+                    tagListResult.textContent = 'タグの取得に失敗しました: ' + error.message;
+                }
+            };
+
+            // 更新ボタンのクリックイベント
+            reloadTagsButton.addEventListener('click', fetchTags);
+
+            // 新規タグ作成
+            createTagButton.addEventListener('click', async () => {
+                const name = newTagName.value;
+                const category = newTagCategory.value;
+                if (!name || !category) {
+                    createTagResult.textContent = 'タグ名とカテゴリを入力してください。';
+                    return;
+                }
+                createTagResult.textContent = '作成中...';
+                const createTag = functions.httpsCallable('createTag');
+                try {
+                    await createTag({ name, category });
+                    createTagResult.textContent = 'タグを作成しました。';
+                    newTagName.value = '';
+                    newTagCategory.value = '';
+                    fetchTags(); // リストを再読み込み
+                } catch (error) {
+                    console.error('Create tag error:', error);
+                    createTagResult.textContent = '作成に失敗しました: ' + error.message;
+                }
+            });
+
+            // 編集・削除ボタンの処理 (イベント委任)
+            tagsListContainer.addEventListener('click', async (e) => {
+                const target = e.target;
+                const tagItem = target.closest('.tag-item');
+                if (!tagItem) return;
+                
+                const tagId = tagItem.dataset.tagId;
+                const tagName = tagItem.querySelector('span').textContent;
+
+                if (target.classList.contains('edit-tag-button')) {
+                    const newName = prompt('新しいタグ名を入力してください:', tagName);
+                    if (!newName) return;
+                    
+                    const currentCategory = tagItem.closest('.tag-group').querySelector('h3').textContent;
+                    const newCategory = prompt('新しいカテゴリ名を入力してください:', currentCategory);
+                    if (!newCategory) return;
+
+                    const updateTag = functions.httpsCallable('updateTag');
+                    try {
+                        await updateTag({ id: tagId, name: newName, category: newCategory });
+                        fetchTags();
+                    } catch (error) {
+                         console.error('Update tag error:', error);
+                         alert('更新に失敗しました: ' + error.message);
+                    }
+                }
+
+                if (target.classList.contains('delete-tag-button')) {
+                    if (!confirm(`タグ「${tagName}」を本当に削除しますか？`)) return;
+
+                    const deleteTag = functions.httpsCallable('deleteTag');
+                    try {
+                        await deleteTag({ id: tagId });
+                        fetchTags();
+                    } catch (error) {
+                        console.error('Delete tag error:', error);
+                        alert('削除に失敗しました: ' + error.message);
+                    }
+                }
+            });
+            
+            // 初期表示は行わない
+            // fetchTags();
+        };
+
         // =================================================================
         // ページの動的読み込み
         // =================================================================
@@ -248,6 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'users': initUsersPage,
             'submissions': initSubmissionsPage,
             'messaging': initMessagingPage,
+            'tags': initTagsPage,
         };
         
         let currentPage = '';

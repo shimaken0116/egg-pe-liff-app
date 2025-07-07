@@ -305,6 +305,137 @@ exports.getFormSubmissions = onCall(
 );
 
 /**
+ * =================================================================
+ * タグ管理 (Tags)
+ * =================================================================
+ */
+
+/**
+ * すべてのタグを取得する
+ */
+exports.getTags = onCall(
+  {
+    region: "asia-northeast1",
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    try {
+      const snapshot = await db.collection("tags").get();
+      let tags = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // 関数内でソートを実行
+      tags.sort((a, b) => {
+        const catA = a.category || '';
+        const catB = b.category || '';
+        const nameA = a.name || '';
+        const nameB = b.name || '';
+        
+        if (catA < catB) return -1;
+        if (catA > catB) return 1;
+        
+        if (nameA < nameB) return -1;
+        if (nameA > nameB) return 1;
+        
+        return 0;
+      });
+
+      return { tags };
+    } catch (error) {
+      logger.error("Failed to get tags", error);
+      throw new functions.https.HttpsError("internal", "Failed to get tags.", error);
+    }
+  }
+);
+
+/**
+ * 新しいタグを作成する
+ */
+exports.createTag = onCall(
+  {
+    region: "asia-northeast1",
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    const { name, category } = request.data;
+    if (!name || !category) {
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'name' and 'category'.");
+    }
+    try {
+      const newTagRef = await db.collection("tags").add({
+        name: name,
+        category: category,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return { success: true, id: newTagRef.id };
+    } catch (error) {
+      logger.error("Failed to create tag", error);
+      throw new functions.https.HttpsError("internal", "Failed to create tag.", error);
+    }
+  }
+);
+
+/**
+ * タグを更新する
+ */
+exports.updateTag = onCall(
+  {
+    region: "asia-northeast1",
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    const { id, name, category } = request.data;
+    if (!id || !name || !category) {
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'id', 'name', and 'category'.");
+    }
+    try {
+      await db.collection("tags").doc(id).update({
+        name: name,
+        category: category,
+      });
+      return { success: true };
+    } catch (error) {
+      logger.error(`Failed to update tag ${id}`, error);
+      throw new functions.https.HttpsError("internal", "Failed to update tag.", error);
+    }
+  }
+);
+
+/**
+ * タグを削除する
+ */
+exports.deleteTag = onCall(
+  {
+    region: "asia-northeast1",
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    const { id } = request.data;
+    if (!id) {
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'id'.");
+    }
+    try {
+      await db.collection("tags").doc(id).delete();
+      return { success: true };
+    } catch (error) {
+      logger.error(`Failed to delete tag ${id}`, error);
+      throw new functions.https.HttpsError("internal", "Failed to delete tag.", error);
+    }
+  }
+);
+
+/**
  * 指定したユーザーにリッチメニューをリンクする
  * @param {string} userId - LINEユーザーID
  * @param {string} richMenuId - リッチメニューID

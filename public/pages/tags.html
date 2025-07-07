@@ -1,0 +1,52 @@
+<style>
+    .tag-group {
+        margin-bottom: 20px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 15px;
+        background-color: #fff;
+    }
+    .tag-group h3 {
+        margin-top: 0;
+        border-bottom: 2px solid #eee;
+        padding-bottom: 10px;
+    }
+    .tag-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px;
+        border-bottom: 1px solid #eee;
+    }
+    .tag-item:last-child {
+        border-bottom: none;
+    }
+    .tag-item span {
+        flex-grow: 1;
+    }
+    .tag-actions button {
+        margin-left: 5px;
+    }
+    #new-tag-form {
+        margin-bottom: 30px;
+        padding: 20px;
+        background-color: #f9f9f9;
+        border-radius: 8px;
+    }
+</style>
+
+<h2>タグ管理</h2>
+
+<div id="new-tag-form">
+    <h3>新しいタグを作成</h3>
+    <input type="text" id="newTagName" placeholder="タグ名 (例: 体験レッスン)">
+    <input type="text" id="newTagCategory" placeholder="カテゴリ (例: ステータス)">
+    <button id="createTagButton">作成</button>
+    <p id="createTagResult"></p>
+</div>
+
+<div id="tags-list-container">
+    <h3>既存のタグ <button id="reloadTagsButton">更新</button></h3>
+    <!-- タグはここに動的に読み込まれる -->
+</div>
+<p id="tagListResult"></p> 

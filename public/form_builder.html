@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>フォームビルダー - Admin</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f9; color: #333; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #444; }
+        .form-meta input, .form-meta textarea { width: 98%; padding: 8px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        .question-box { background: #f9f9f9; border: 1px solid #e3e3e3; padding: 15px; margin-top: 20px; border-radius: 6px; }
+        .question-box input, .question-box select { width: 98%; padding: 8px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        .options-container .option-item { display: flex; align-items: center; margin-bottom: 5px; }
+        .options-container input { width: auto; flex-grow: 1; margin-right: 10px; }
+        button { padding: 10px 15px; border: none; border-radius: 4px; color: white; cursor: pointer; }
+        .btn-add { background-color: #28a745; }
+        .btn-remove { background-color: #dc3545; }
+        .btn-save { background-color: #007bff; font-size: 1.1em; margin-top: 20px; }
+        .delete-question { float: right; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>フォームビルダー</h1>
+        
+        <div class="form-meta">
+            <h2>フォーム情報</h2>
+            <input type="text" id="form-title" placeholder="フォームのタイトル">
+            <textarea id="form-description" placeholder="フォームの説明（任意）"></textarea>
+        </div>
+
+        <div id="questions-container">
+            <!-- 質問がここに追加される -->
+        </div>
+
+        <button id="add-question" class="btn-add">質問を追加</button>
+        <hr>
+        <button id="save-form" class="btn-save">フォームを保存</button>
+        <p id="save-status"></p>
+    </div>
+
+    <!-- Firebase -->
+    <script src="/__/firebase/8.10.1/firebase-app.js"></script>
+    <script src="/__/firebase/8.10.1/firebase-auth.js"></script>
+    <script src="/__/firebase/8.10.1/firebase-firestore.js"></script>
+    <script src="/__/firebase/8.10.1/firebase-functions.js"></script>
+    <script src="/__/firebase/init.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const auth = firebase.auth();
+            const functions = firebase.functions();
+
+            let questionCounter = 0;
+
+            auth.onAuthStateChanged(user => {
+                if (!user) {
+                    window.location.href = '/admin.html'; // 未認証ならリダイレクト
+                }
+            });
+
+            const addQuestionButton = document.getElementById('add-question');
+            const questionsContainer = document.getElementById('questions-container');
+            const saveFormButton = document.getElementById('save-form');
+
+            addQuestionButton.addEventListener('click', () => {
+                questionCounter++;
+                const questionId = `question-${questionCounter}`;
+                const questionBox = document.createElement('div');
+                questionBox.classList.add('question-box');
+                questionBox.setAttribute('id', questionId);
+                questionBox.innerHTML = `
+                    <button class="btn-remove delete-question" data-target="${questionId}">×</button>
+                    <input type="text" class="question-title" placeholder="質問文">
+                    <select class="question-type">
+                        <option value="text">1行テキスト</option>
+                        <option value="radio">ラジオボタン</option>
+                    </select>
+                    <div class="options-container" style="display: none;">
+                        <button class="btn-add add-option">選択肢を追加</button>
+                    </div>
+                `;
+                questionsContainer.appendChild(questionBox);
+            });
+
+            questionsContainer.addEventListener('change', (e) => {
+                if (e.target.classList.contains('question-type')) {
+                    const optionsContainer = e.target.parentElement.querySelector('.options-container');
+                    optionsContainer.style.display = e.target.value === 'radio' ? 'block' : 'none';
+                }
+            });
+
+            questionsContainer.addEventListener('click', (e) => {
+                if (e.target.classList.contains('add-option')) {
+                    const optionItem = document.createElement('div');
+                    optionItem.classList.add('option-item');
+                    optionItem.innerHTML = `
+                        <input type="text" class="option-value" placeholder="選択肢">
+                        <button class="btn-remove remove-option">×</button>
+                    `;
+                    e.target.parentElement.appendChild(optionItem);
+                }
+                if (e.target.classList.contains('remove-option')) {
+                    e.target.parentElement.remove();
+                }
+                if (e.target.classList.contains('delete-question')) {
+                    const targetId = e.target.getAttribute('data-target');
+                    document.getElementById(targetId).remove();
+                }
+            });
+
+            saveFormButton.addEventListener('click', async () => {
+                const title = document.getElementById('form-title').value;
+                if (!title) {
+                    alert('フォームのタイトルは必須です。');
+                    return;
+                }
+
+                const questions = [];
+                document.querySelectorAll('.question-box').forEach(box => {
+                    const questionTitle = box.querySelector('.question-title').value;
+                    const questionType = box.querySelector('.question-type').value;
+                    
+                    const questionData = {
+                        text: questionTitle,
+                        type: questionType,
+                    };
+
+                    if (questionType === 'radio') {
+                        const options = [];
+                        box.querySelectorAll('.option-value').forEach(opt => {
+                            if(opt.value) options.push(opt.value);
+                        });
+                        questionData.options = options;
+                    }
+                    questions.push(questionData);
+                });
+
+                const saveStatus = document.getElementById('save-status');
+                saveStatus.textContent = '保存中...';
+                
+                try {
+                    const createForm = functions.httpsCallable('createForm');
+                    const result = await createForm({
+                        title: title,
+                        description: document.getElementById('form-description').value,
+                        questions: questions
+                    });
+                    saveStatus.textContent = `フォームが正常に保存されました。フォームID: ${result.data.formId}`;
+                    // フォーム作成後はリセット
+                    document.getElementById('form-title').value = '';
+                    document.getElementById('form-description').value = '';
+                    questionsContainer.innerHTML = '';
+
+                } catch (error) {
+                    console.error("Error saving form:", error);
+                    saveStatus.textContent = 'エラー: フォームの保存に失敗しました。' + error.message;
+                }
+            });
+        });
+    </script>
+</body>
+</html> 

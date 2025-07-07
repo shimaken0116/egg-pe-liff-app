@@ -1,9 +1,14 @@
 const functions = require("firebase-functions");
 const { onRequest } = require("firebase-functions/v2/https");
 const { onCall } = require("firebase-functions/v2/https");
+const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const line = require("@line/bot-sdk");
 const admin = require("firebase-admin");
 const { logger } = require("firebase-functions");
+
+// リッチメニューIDを定数として定義
+const RICH_MENU_ID_NEW_USER = "richmenu-ae60d477857b475e9a7603fa4861c738";
+const RICH_MENU_ID_MEMBER = "richmenu-4ec9391d5f4bdf2bcff033cdefcfb69d";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -72,6 +77,9 @@ const handleFollowEvent = async (event, client) => {
     });
 
     logger.info(`New user ${userId} has been saved.`);
+
+    // 新規ユーザー向けリッチメニューをリンク
+    await linkRichMenuToUser(userId, RICH_MENU_ID_NEW_USER);
   } catch (error) {
     logger.error(`Failed to get profile or save user data for ${userId}`, error);
   }
@@ -244,4 +252,93 @@ exports.submitLiffForm = onCall(
       throw new functions.https.HttpsError("internal", "Failed to save form submission.", error);
     }
   }
-); 
+);
+
+/**
+ * LIFFフォームの申込一覧を取得する
+ */
+exports.getFormSubmissions = onCall(
+  {
+    region: "asia-northeast1",
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    
+    try {
+      const snapshot = await db.collection("formSubmissions").orderBy("submittedAt", "desc").get();
+      const submissions = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          // タイムスタンプを読みやすい形式に変換
+          submittedAt: data.submittedAt.toDate().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
+        }
+      });
+      return { submissions };
+    } catch (error) {
+      logger.error("Failed to get form submissions", error);
+      throw new functions.https.HttpsError("internal", "Failed to get form submissions.", error);
+    }
+  }
+);
+
+/**
+ * 指定したユーザーにリッチメニューをリンクする
+ * @param {string} userId - LINEユーザーID
+ * @param {string} richMenuId - リッチメニューID
+ */
+const linkRichMenuToUser = async (userId, richMenuId) => {
+  // 環境変数からアクセストークンを読み込む
+  const channelAccessToken = process.env.LINE_ACCESS_TOKEN;
+  if (!channelAccessToken) {
+    logger.error("LINE channel access token is not set in environment variables.");
+    return;
+  }
+
+  const client = new line.Client({ channelAccessToken });
+  try {
+    await client.linkRichMenuToUser(userId, richMenuId);
+    logger.info(`Linked rich menu ${richMenuId} to user ${userId}`);
+  } catch (error) {
+    logger.error(`Failed to link rich menu to user ${userId}`, error.response ? error.response.data : error.message);
+  }
+};
+
+/**
+ * ユーザーのタグ変更をトリガーにリッチメニューを切り替える
+ */
+exports.onUserTagsUpdate = onDocumentUpdated(
+  {
+    document: "users/{userId}",
+    region: "asia-northeast1",
+    secrets: ["LINE_ACCESS_TOKEN"],
+  },
+  async (event) => {
+    const userId = event.params.userId;
+    const newData = event.data.after.data();
+    const oldData = event.data.before.data();
+
+    // タグが変更されたかチェック (v2ではデータが存在しない場合がありえるのでチェック)
+    if (!oldData || !newData) {
+      logger.info(`User data is incomplete for user ${userId}. Skipping.`);
+      return;
+    }
+
+    if (JSON.stringify(newData.tags) === JSON.stringify(oldData.tags)) {
+      logger.info(`Tags not changed for user ${userId}. Skipping.`);
+      return;
+    }
+
+    logger.info(`Tags changed for user ${userId}. New tags: ${newData.tags}`);
+
+    // タグに「会員」が含まれているかでリッチメニューを切り替え
+    if (newData.tags && newData.tags.includes("会員")) {
+      await linkRichMenuToUser(userId, RICH_MENU_ID_MEMBER);
+    } else {
+      await linkRichMenuToUser(userId, RICH_MENU_ID_NEW_USER);
+    }
+  }); 

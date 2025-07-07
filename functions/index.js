@@ -180,11 +180,29 @@ exports.getUsers = onCall(
     if (!request.auth) {
       throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
+
+    const { pageSize = 30, startAfterDocId } = request.data;
     
     try {
-      const snapshot = await db.collection("users").get();
+      let query = db.collection("users")
+                    .orderBy("followedAt", "desc")
+                    .limit(pageSize);
+
+      if (startAfterDocId) {
+        const startAfterDoc = await db.collection("users").doc(startAfterDocId).get();
+        if (startAfterDoc.exists) {
+          query = query.startAfter(startAfterDoc);
+        }
+      }
+
+      const snapshot = await query.get();
+      
       const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      return { users };
+
+      // 次のページのために、最後に取得したドキュメントのIDを渡す
+      const lastDocId = snapshot.docs.length === pageSize ? snapshot.docs[snapshot.docs.length - 1].id : null;
+
+      return { users, lastDocId };
     } catch (error) {
       logger.error("Failed to get users", error);
       throw new functions.https.HttpsError("internal", "Failed to get users.", error);

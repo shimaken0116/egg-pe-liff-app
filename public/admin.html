@@ -50,8 +50,33 @@
           <!-- User data will be inserted here -->
         </tbody>
       </table>
+      <div id="pagination-controls" style="padding-top: 10px;">
+        <button id="prevButton" style="display: none;">前のページ</button>
+        <button id="nextButton" style="display: none;">次のページ</button>
+      </div>
     </div>
     <p id="userListResult"></p>
+
+    <hr>
+    <h2>申込一覧</h2>
+    <p>
+      <button id="getSubmissionsButton">申込情報を更新</button>
+    </p>
+    <div id="submissions-list-container">
+      <table id="submissionsTable" border="1" style="width:100%; border-collapse: collapse;">
+        <thead>
+          <tr>
+            <th style="padding: 8px; text-align: left;">申込日時</th>
+            <th style="padding: 8px; text-align: left;">表示名</th>
+            <th style="padding: 8px; text-align: left;">希望クラス</th>
+          </tr>
+        </thead>
+        <tbody id="submissionsTableBody">
+          <!-- Submission data will be inserted here -->
+        </tbody>
+      </table>
+    </div>
+    <p id="submissionListResult"></p>
   </div>
 
 
@@ -88,6 +113,13 @@
         const getUsersButton = document.getElementById('getUsersButton');
         const usersTableBody = document.getElementById('usersTableBody');
         const userListResult = document.getElementById('userListResult');
+
+        const prevButton = document.getElementById('prevButton');
+        const nextButton = document.getElementById('nextButton');
+
+        const getSubmissionsButton = document.getElementById('getSubmissionsButton');
+        const submissionsTableBody = document.getElementById('submissionsTableBody');
+        const submissionListResult = document.getElementById('submissionListResult');
 
         // Firebase Auth の状態監視
         auth.onAuthStateChanged(user => {
@@ -143,25 +175,35 @@
           }
         });
 
-        // ユーザー一覧取得
-        getUsersButton.addEventListener('click', async () => {
+        // --- ページネーション関連の変数 ---
+        let lastVisibleDocId = null; // 次のページを取得するための最後のドキュメントID
+        let pageHistory = []; // 前のページに戻るための開始ドキュメントIDの履歴
+
+        // ユーザー一覧取得の共通関数
+        const fetchUsers = async (startAfter = null) => {
           if (!auth.currentUser) {
             userListResult.textContent = 'エラー: ログインしていません。';
             return;
           }
           userListResult.textContent = 'ユーザー情報を取得中...';
           usersTableBody.innerHTML = '';
+          prevButton.style.display = 'none';
+          nextButton.style.display = 'none';
 
           const getUsers = functions.httpsCallable('getUsers');
           try {
-            const result = await getUsers();
-            const users = result.data.users;
+            const result = await getUsers({ startAfterDocId: startAfter });
+            const { users, lastDocId } = result.data;
+
+            lastVisibleDocId = lastDocId;
             
             if (users.length === 0) {
               userListResult.textContent = 'ユーザーが見つかりませんでした。';
+              prevButton.style.display = pageHistory.length > 0 ? 'inline' : 'none';
+              nextButton.style.display = 'none';
               return;
             }
-
+            
             users.forEach(user => {
               const row = usersTableBody.insertRow();
               const cell1 = row.insertCell(0);
@@ -199,11 +241,80 @@
               cell4.appendChild(saveButton);
               cell4.style.padding = '8px';
             });
-            userListResult.textContent = `${users.length}人のユーザー情報を表示しました。`;
+            
+            userListResult.textContent = `${usersTableBody.rows.length}人のユーザー情報を表示しました。`;
+
+            // ボタンの表示制御
+            nextButton.style.display = lastVisibleDocId ? 'inline' : 'none';
+            prevButton.style.display = pageHistory.length > 0 ? 'inline' : 'none';
 
           } catch (error) {
             console.error('Get users error:', error);
             userListResult.textContent = 'ユーザー情報の取得に失敗しました: ' + error.message;
+          }
+        };
+
+        // 最初のページを表示
+        getUsersButton.addEventListener('click', () => {
+          lastVisibleDocId = null;
+          pageHistory = [];
+          fetchUsers();
+        });
+
+        // 次のページ
+        nextButton.addEventListener('click', () => {
+          if (!lastVisibleDocId) return;
+          const currentStart = pageHistory.length > 0 ? pageHistory[pageHistory.length - 1] : null;
+          if (lastVisibleDocId !== currentStart) { // 無限に同じページを追加しないように
+             pageHistory.push(lastVisibleDocId);
+          }
+          fetchUsers(lastVisibleDocId);
+        });
+        
+        // 前のページ
+        prevButton.addEventListener('click', () => {
+          pageHistory.pop(); // 現在のページの開始点を捨てる
+          const previousPageStartId = pageHistory.length > 0 ? pageHistory[pageHistory.length-1] : null;
+          fetchUsers(previousPageStartId);
+        });
+
+        // 申込一覧取得
+        getSubmissionsButton.addEventListener('click', async () => {
+          if (!auth.currentUser) {
+            submissionListResult.textContent = 'エラー: ログインしていません。';
+            return;
+          }
+          submissionListResult.textContent = '申込情報を取得中...';
+          submissionsTableBody.innerHTML = '';
+
+          const getFormSubmissions = functions.httpsCallable('getFormSubmissions');
+          try {
+            const result = await getFormSubmissions();
+            const submissions = result.data.submissions;
+            
+            if (submissions.length === 0) {
+              submissionListResult.textContent = '申込データが見つかりませんでした。';
+              return;
+            }
+
+            submissions.forEach(sub => {
+              const row = submissionsTableBody.insertRow();
+              const cell1 = row.insertCell(0);
+              const cell2 = row.insertCell(1);
+              const cell3 = row.insertCell(2);
+
+              cell1.textContent = sub.submittedAt;
+              cell1.style.padding = '8px';
+              cell2.textContent = sub.displayName;
+              cell2.style.padding = '8px';
+              cell3.textContent = sub.desiredClass;
+              cell3.style.padding = '8px';
+            });
+            submissionListResult.textContent = `${submissions.length}件の申込情報を表示しました。`;
+
+          } catch (error) {
+            console.error('Get submissions error:', error);
+            submissionListResult.textContent = '申込情報の取得に失敗しました: ' + error.message;
           }
         });
 

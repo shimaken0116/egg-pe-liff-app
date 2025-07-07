@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Admin Console</title>
+</head>
+<body>
+
+  <h1>管理者コンソール</h1>
+
+  <div id="auth-container">
+    <div id="user-info" style="display: none;">
+      <p>ようこそ, <span id="displayName"></span> さん</p>
+      <img id="photoURL" src="" alt="User Photo" style="width: 50px; height: 50px; border-radius: 50%;">
+      <p><button id="logoutButton">ログアウト</button></p>
+    </div>
+    <div id="login-container">
+      <p>操作を行うにはログインしてください。</p>
+      <button id="loginButton">Googleでログイン</button>
+    </div>
+  </div>
+
+  <hr>
+
+  <div id="main-content" style="display: none;">
+    <h2>セグメント配信</h2>
+    <p>
+      <input type="text" id="tagInput" placeholder="タグ (例: 新規)">
+      <input type="text" id="messageInput" placeholder="メッセージ本文">
+      <button id="sendMessageButton">メッセージ送信テスト</button>
+    </p>
+    <p id="result"></p>
+
+    <hr>
+    <h2>会員一覧</h2>
+    <p>
+      <button id="getUsersButton">ユーザー情報を更新</button>
+    </p>
+    <div id="user-list-container">
+      <table id="usersTable" border="1" style="width:100%; border-collapse: collapse;">
+        <thead>
+          <tr>
+            <th style="padding: 8px; text-align: left;">表示名</th>
+            <th style="padding: 8px; text-align: left;">ステータス</th>
+            <th style="padding: 8px; text-align: left;">タグ</th>
+            <th style="padding: 8px; text-align: left;">操作</th>
+          </tr>
+        </thead>
+        <tbody id="usersTableBody">
+          <!-- User data will be inserted here -->
+        </tbody>
+      </table>
+    </div>
+    <p id="userListResult"></p>
+  </div>
+
+
+  <!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
+  <script src="/__/firebase/9.6.1/firebase-app-compat.js"></script>
+  <!-- Add Firebase products that you want to use -->
+  <script src="/__/firebase/9.6.1/firebase-auth-compat.js"></script>
+  <script src="/__/firebase/9.6.1/firebase-functions-compat.js"></script>
+
+  <script src="/__/firebase/init.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      try {
+        const app = firebase.app();
+        const auth = firebase.auth();
+        const functions = app.functions('asia-northeast1');
+
+        const loginContainer = document.getElementById('login-container');
+        const userInfoDiv = document.getElementById('user-info');
+        const mainContentDiv = document.getElementById('main-content');
+        
+        const displayNameSpan = document.getElementById('displayName');
+        const photoURLImg = document.getElementById('photoURL');
+        
+        const loginButton = document.getElementById('loginButton');
+        const logoutButton = document.getElementById('logoutButton');
+        
+        const sendMessageButton = document.getElementById('sendMessageButton');
+        const tagInput = document.getElementById('tagInput');
+        const messageInput = document.getElementById('messageInput');
+        const resultDiv = document.getElementById('result');
+
+        const getUsersButton = document.getElementById('getUsersButton');
+        const usersTableBody = document.getElementById('usersTableBody');
+        const userListResult = document.getElementById('userListResult');
+
+        // Firebase Auth の状態監視
+        auth.onAuthStateChanged(user => {
+          if (user) {
+            // ログイン済みの処理
+            loginContainer.style.display = 'none';
+            userInfoDiv.style.display = 'block';
+            mainContentDiv.style.display = 'block';
+            
+            displayNameSpan.textContent = user.displayName;
+            photoURLImg.src = user.photoURL;
+
+          } else {
+            // 未ログインの処理
+            loginContainer.style.display = 'block';
+            userInfoDiv.style.display = 'none';
+            mainContentDiv.style.display = 'none';
+          }
+        });
+
+        // ログイン処理
+        loginButton.addEventListener('click', () => {
+          const provider = new firebase.auth.GoogleAuthProvider();
+          auth.signInWithPopup(provider).catch(error => {
+            console.error("Login failed:", error);
+          });
+        });
+
+        // ログアウト処理
+        logoutButton.addEventListener('click', () => {
+          auth.signOut();
+        });
+
+        // セグメント配信
+        sendMessageButton.addEventListener('click', async () => {
+          if (!auth.currentUser) {
+            resultDiv.textContent = 'エラー: ログインしていません。';
+            return;
+          }
+          const tag = tagInput.value || '新規';
+          const messageText = messageInput.value || 'Webページからのテスト配信です';
+          
+          resultDiv.textContent = '関数を呼び出し中...';
+
+          const pushMessage = functions.httpsCallable('pushMessage');
+          try {
+            const result = await pushMessage({ tag: tag, messageText: messageText });
+            console.log('Function result:', result);
+            resultDiv.textContent = '関数の実行に成功しました: ' + JSON.stringify(result.data);
+          } catch (error) {
+            console.error('Function error:', error);
+            resultDiv.textContent = '関数の実行に失敗しました: ' + error.message;
+          }
+        });
+
+        // ユーザー一覧取得
+        getUsersButton.addEventListener('click', async () => {
+          if (!auth.currentUser) {
+            userListResult.textContent = 'エラー: ログインしていません。';
+            return;
+          }
+          userListResult.textContent = 'ユーザー情報を取得中...';
+          usersTableBody.innerHTML = '';
+
+          const getUsers = functions.httpsCallable('getUsers');
+          try {
+            const result = await getUsers();
+            const users = result.data.users;
+            
+            if (users.length === 0) {
+              userListResult.textContent = 'ユーザーが見つかりませんでした。';
+              return;
+            }
+
+            users.forEach(user => {
+              const row = usersTableBody.insertRow();
+              const cell1 = row.insertCell(0);
+              const cell2 = row.insertCell(1);
+              const cell3 = row.insertCell(2);
+              const cell4 = row.insertCell(3);
+
+              cell1.textContent = user.displayName;
+              cell1.style.padding = '8px';
+              cell2.textContent = user.status;
+              cell2.style.padding = '8px';
+              
+              const tagsInput = document.createElement('input');
+              tagsInput.type = 'text';
+              tagsInput.value = user.tags ? user.tags.join(', ') : '';
+              tagsInput.style.width = '95%';
+              cell3.appendChild(tagsInput);
+              cell3.style.padding = '8px';
+
+              const saveButton = document.createElement('button');
+              saveButton.textContent = '保存';
+              saveButton.addEventListener('click', async () => {
+                const newTags = tagsInput.value.split(',').map(tag => tag.trim()).filter(tag => tag);
+                userListResult.textContent = `ユーザーID: ${user.id} のタグを更新中...`;
+                
+                const updateUserTags = functions.httpsCallable('updateUserTags');
+                try {
+                  await updateUserTags({ userId: user.id, tags: newTags });
+                  userListResult.textContent = `ユーザーID: ${user.id} のタグを更新しました。`;
+                } catch (error) {
+                  console.error('Update tags error:', error);
+                  userListResult.textContent = 'タグの更新に失敗しました: ' + error.message;
+                }
+              });
+              cell4.appendChild(saveButton);
+              cell4.style.padding = '8px';
+            });
+            userListResult.textContent = `${users.length}人のユーザー情報を表示しました。`;
+
+          } catch (error) {
+            console.error('Get users error:', error);
+            userListResult.textContent = 'ユーザー情報の取得に失敗しました: ' + error.message;
+          }
+        });
+
+      } catch (e) {
+        console.error(e);
+        document.body.innerHTML = 'Error loading the app, check the console.';
+      }
+    });
+  </script>
+</body>
+</html>

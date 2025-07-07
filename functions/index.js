@@ -107,13 +107,17 @@ const handleMessageEvent = async (event, client) => {
   }
 };
 
+/**
+ * @see https://firebase.google.com/docs/functions/callable
+ */
 exports.pushMessage = onCall(
-  { region: "asia-northeast1", secrets: ["LINE_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"] },
+  { 
+    region: "asia-northeast1", 
+    secrets: ["LINE_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"],
+    enforceAppCheck: false, // App Checkの強制を無効化（デバッグ用）
+  },
   async (request) => {
-    // 認証チェック（管理者ページなどからの呼び出しを想定）
-    // if (!request.auth) {
-    //   throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
-    // }
+    // 認証チェックは不要なので削除
     
     const { tag, messageText } = request.data;
 
@@ -151,6 +155,93 @@ exports.pushMessage = onCall(
     } catch (error) {
       logger.error("Failed to send push message", error);
       throw new functions.https.HttpsError("internal", "Failed to send push message.", error);
+    }
+  }
+);
+
+/**
+ * ユーザー一覧を取得する
+ */
+exports.getUsers = onCall(
+  {
+    region: "asia-northeast1",
+    enforceAppCheck: false, // App Checkの強制を無効化（デバッグ用）
+  },
+  async (request) => {
+    // 認証チェック
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    
+    try {
+      const snapshot = await db.collection("users").get();
+      const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      return { users };
+    } catch (error) {
+      logger.error("Failed to get users", error);
+      throw new functions.https.HttpsError("internal", "Failed to get users.", error);
+    }
+  }
+);
+
+/**
+ * ユーザーのタグを更新する
+ */
+exports.updateUserTags = onCall(
+  {
+    region: "asia-northeast1",
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    
+    const { userId, tags } = request.data;
+    if (!userId || !tags) {
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'userId' and 'tags'.");
+    }
+
+    try {
+      const userRef = db.collection("users").doc(userId);
+      await userRef.update({
+        tags: tags, // tagsはフロントエンドから配列で受け取る
+      });
+      logger.info(`Tags updated for user ${userId}`);
+      return { success: true, message: `Tags updated for user ${userId}.` };
+    } catch (error) {
+      logger.error(`Failed to update tags for user ${userId}`, error);
+      throw new functions.https.HttpsError("internal", "Failed to update tags.", error);
+    }
+  }
+);
+
+/**
+ * LIFFフォームからの申し込みを処理する
+ */
+exports.submitLiffForm = onCall(
+  {
+    region: "asia-northeast1",
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    const { userId, displayName, desiredClass } = request.data;
+    if (!userId || !displayName || !desiredClass) {
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'userId', 'displayName', and 'desiredClass'.");
+    }
+
+    try {
+      await db.collection("formSubmissions").add({
+        userId: userId,
+        displayName: displayName,
+        desiredClass: desiredClass,
+        submittedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      logger.info(`New form submission from user ${userId}`);
+      return { success: true, message: "申し込みを受け付けました。" };
+    } catch (error) {
+      logger.error(`Failed to save form submission from user ${userId}`, error);
+      throw new functions.https.HttpsError("internal", "Failed to save form submission.", error);
     }
   }
 ); 

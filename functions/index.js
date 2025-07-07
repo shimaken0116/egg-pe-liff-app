@@ -543,7 +543,7 @@ const getLineClient = () => {
 };
 
 /**
- * リッチメニューの一覧を取得する
+ * リッチメニューのリストを取得する
  */
 exports.getRichMenuList = onCall(
   {
@@ -552,16 +552,42 @@ exports.getRichMenuList = onCall(
     enforceAppCheck: false,
   },
   async (request) => {
+    logger.info("getRichMenuList called");
     if (!request.auth) {
-      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+      logger.warn("getRichMenuList: Unauthenticated call");
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "The function must be called while authenticated."
+      );
     }
     try {
+      logger.info("getRichMenuList: Initializing LINE client.");
       const client = getLineClient();
+      logger.info("getRichMenuList: Calling client.getRichMenuList()");
       const richMenus = await client.getRichMenuList();
-      return { richMenus };
+      logger.info(`getRichMenuList: Successfully got ${richMenus.length} rich menus.`);
+
+      // Sanitize the output to ensure it's JSON-serializable
+      const safeRichMenus = richMenus.map(menu => ({
+        richMenuId: menu.richMenuId,
+        name: menu.name,
+        size: menu.size,
+        chatBarText: menu.chatBarText,
+        selected: menu.selected,
+        areas: menu.areas,
+      }));
+
+      return { richMenus: safeRichMenus };
+
     } catch (error) {
-      logger.error("Failed to get rich menu list", error);
-      throw new functions.https.HttpsError("internal", "Failed to get rich menu list.", error.originalError?.response?.data || error);
+      logger.error("getRichMenuList: Error getting rich menu list.", {
+        errorMessage: error.message,
+        originalError: error.originalError?.response?.data,
+      });
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to get rich menu list."
+      );
     }
   }
 );

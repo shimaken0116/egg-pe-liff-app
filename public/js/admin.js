@@ -8,12 +8,18 @@ let functions;
 
 // --- Utility Functions (moved to global scope) ---
 function showLoading() {
-  const spinner = document.getElementById('loading-spinner') || document.getElementById('global-spinner');
-  if(spinner) spinner.style.display = 'flex';
+  console.log("showLoading CALLED", new Error().stack.split("\n")[2].trim());
+  const localSpinner = document.getElementById('loading-spinner');
+  const globalSpinner = document.getElementById('global-spinner');
+  if(localSpinner) localSpinner.style.display = 'flex';
+  if(globalSpinner) globalSpinner.style.display = 'flex';
 }
 function hideLoading() {
-  const spinner = document.getElementById('loading-spinner') || document.getElementById('global-spinner');
-  if(spinner) spinner.style.display = 'none';
+  console.log("hideLoading CALLED", new Error().stack.split("\n")[2].trim());
+  const localSpinner = document.getElementById('loading-spinner');
+  const globalSpinner = document.getElementById('global-spinner');
+  if(localSpinner) localSpinner.style.display = 'none';
+  if(globalSpinner) globalSpinner.style.display = 'none';
 }
 
 document.addEventListener('DOMContentLoaded', async (event) => {
@@ -504,7 +510,16 @@ document.addEventListener('DOMContentLoaded', async (event) => {
             'messaging': initMessagingPage,
             'tags': initTagsPage,
             'user-detail': initUserDetailPage,
-            'rich-menu-list': loadRichMenuList,
+            'rich-menu-list': async () => {
+                try {
+                    await loadRichMenuList();
+                } catch (e) {
+                    console.error("Failed to execute loadRichMenuList", e);
+                } finally {
+                    console.log("[DEBUG] Initializer's finally block reached. Calling hideLoading.");
+                    hideLoading(); // Ensure spinner is hidden
+                }
+            },
             'rich-menu-editor': () => {} // Do nothing, handled by module in HTML
         };
         
@@ -587,7 +602,7 @@ async function loadRichMenuList() {
   if (!tableBody) return;
 
   tableBody.innerHTML = '';
-  showLoading(); // Use global function
+  // showLoading(); // This will be handled by the caller (loadPage)
 
   try {
     const getRichMenuList = functions.httpsCallable('getRichMenuList');
@@ -654,9 +669,8 @@ async function loadRichMenuList() {
   } catch (error) {
     console.error('Error loading rich menu list:', error);
     tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">リッチメニューの読み込みに失敗しました: ${error.message}</td></tr>`;
-  } finally {
-    hideLoading(); // Use global function
   }
+  // No finally block here, it's handled by the caller
 }
 
 // リッチメニューの削除処理

@@ -16,7 +16,13 @@
     <script src="js/admin.js" type="module" defer></script>
 </head>
 <body>
-    <div id="app-container">
+    <div id="global-spinner" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; display: none;">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <header class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
         <!-- ログイン画面 -->
         <div id="login-container" class="full-screen-center">
             <h1>管理者コンソール</h1>

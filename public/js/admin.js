@@ -1,11 +1,23 @@
-// This file will contain the main JavaScript logic for the admin console.
-// Authentication, page loading, and event handling will be implemented here. 
+// Import compat libraries to create the global `firebase` object
+import 'https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js';
+import 'https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js';
+import 'https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js';
 
-document.addEventListener('DOMContentLoaded', () => {
+let auth;
+let functions;
+
+document.addEventListener('DOMContentLoaded', async (event) => {
     try {
-        // Firebaseのインスタンスを取得
-        const auth = firebase.auth();
-        const functions = firebase.app().functions('asia-northeast1');
+        const firebaseConfig = await (await fetch('/__/firebase/init.json')).json();
+        // Initialize using the global firebase object
+        const app = firebase.initializeApp(firebaseConfig);
+        
+        // Make app globally available for other scripts that might need it
+        window.firebaseApp = app;
+
+        // Initialize top-level variables
+        auth = firebase.auth();
+        functions = app.functions('asia-northeast1');
 
         // DOM要素の取得
         const loginContainer = document.getElementById('login-container');
@@ -31,11 +43,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 loginContainer.style.display = 'none';
                 mainContainer.style.display = 'flex';
                 userInfo.displayName.textContent = user.displayName;
-                userInfo.photoURL.src = user.photoURL;
+                if (user.photoURL) {
+                    userInfo.photoURL.src = user.photoURL;
+                }
             } else {
                 // 未ログイン
                 loginContainer.style.display = 'flex';
                 mainContainer.style.display = 'none';
+                userInfo.displayName.textContent = '';
+                userInfo.photoURL.src = ''; // Clear the image
             }
         });
 
@@ -44,14 +60,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // =================================================================
         loginButton.addEventListener('click', () => {
             const provider = new firebase.auth.GoogleAuthProvider();
-            auth.signInWithPopup(provider).catch(error => {
+            firebase.auth().signInWithPopup(provider).catch(error => {
                 console.error("Login failed:", error);
                 alert(`ログインに失敗しました: ${error.message}`);
             });
         });
 
         logoutButton.addEventListener('click', () => {
-            auth.signOut();
+            firebase.auth().signOut();
         });
         
         // =================================================================
@@ -242,8 +258,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const tagListResult = document.getElementById('tagListResult');
             const reloadTagsButton = document.getElementById('reloadTagsButton');
 
-            const functions = firebase.app().functions('asia-northeast1');
-
             // タグのレンダリング
             const renderTags = (tags) => {
                 // h3以外の要素をクリア
@@ -380,8 +394,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const functions = firebase.app().functions('asia-northeast1');
-
             // DOM要素
             const userDisplayName = document.getElementById('userDisplayName');
             const tagsCheckboxContainer = document.getElementById('tags-checkbox-container');
@@ -482,24 +494,23 @@ document.addEventListener('DOMContentLoaded', () => {
             'messaging': initMessagingPage,
             'tags': initTagsPage,
             'user-detail': initUserDetailPage,
+            'rich-menu-list': loadRichMenuList,
         };
         
         let currentPage = '';
         const eventListeners = new AbortController(); // イベントリスナーを管理
 
         const loadPage = async (page, params = {}) => {
-            // currentPageの比較ロジックを削除し、常にページを読み込むようにする
-            // currentPage = page;
-
             try {
                 const response = await fetch(`pages/${page}.html`);
                 if (!response.ok) throw new Error(`ページの読み込みに失敗しました: ${response.statusText}`);
                 
                 contentArea.innerHTML = await response.text();
 
-                // ページに対応する初期化関数を実行 (パラメータを渡す)
                 if (pageInitializers[page]) {
                     pageInitializers[page](params);
+                } else if (page === 'rich-menu-editor' && window.richMenuEditor) {
+                    window.richMenuEditor.init(params);
                 }
 
             } catch (error) {
@@ -522,9 +533,23 @@ document.addEventListener('DOMContentLoaded', () => {
         contentArea.addEventListener('click', (e) => {
             if (e.target.id === 'backToListButton') {
                 loadPage('users');
-                // サイドバーのメニューもアクティブにする
                 globalNav.querySelectorAll('a').forEach(a => a.classList.remove('active'));
                 globalNav.querySelector('a[data-page="users"]').classList.add('active');
+            } else if (e.target.id === 'backToRichMenuListButton') {
+                loadPage('rich-menu-list');
+                globalNav.querySelectorAll('a').forEach(a => a.classList.remove('active'));
+                globalNav.querySelector('a[data-page="rich-menu-list"]').classList.add('active');
+            }
+
+            // リッチメニュー作成ボタン
+            if (e.target && e.target.id === 'createNewRichMenuButton') {
+                loadPage('rich-menu-editor');
+            }
+
+            // リッチメニュー編集ボタン
+            if (e.target && e.target.classList.contains('btn-edit-rich-menu')) {
+                const richMenuId = e.target.dataset.id;
+                loadPage('rich-menu-editor', { richMenuId });
             }
         });
 
@@ -533,3 +558,106 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.innerHTML = 'アプリケーションの初期化に失敗しました。コンソールを確認してください。';
     }
 }); 
+
+/**
+ * =================================================================
+ * リッチメニュー管理 (Rich Menu)
+ * =================================================================
+ */
+
+// リッチメニューリストを読み込んで表示する
+async function loadRichMenuList() {
+  const tableBody = document.querySelector('#richMenuListTable tbody');
+  const spinner = document.getElementById('loading-spinner');
+  if (!tableBody || !spinner) return;
+
+  tableBody.innerHTML = '';
+  spinner.style.display = 'flex';
+
+  try {
+    const getRichMenuList = functions.httpsCallable('getRichMenuList');
+    const result = await getRichMenuList();
+    const richMenus = result.data.richMenus;
+
+    if (richMenus.length === 0) {
+      tableBody.innerHTML = '<tr><td colspan="5" class="text-center">リッチメニューがありません。</td></tr>';
+      spinner.style.display = 'none';
+      return;
+    }
+    
+    const downloadRichMenuImage = functions.httpsCallable('downloadRichMenuImage');
+
+    const rowPromises = richMenus.map(async (menu) => {
+      // Initialize with a default value.
+      let imageCellHtml = '<small class="text-muted">画像なし</small>';
+      
+      try {
+        const imageResult = await downloadRichMenuImage({ richMenuId: menu.richMenuId });
+        
+        if (imageResult.data.success) {
+          const imageBase64 = imageResult.data.imageBase64;
+          // Only overwrite if the download was successful and we have an image.
+          if (imageBase64) {
+            imageCellHtml = `<img src="data:image/png;base64,${imageBase64}" class="img-fluid" style="max-width: 150px; max-height: 100px;"/>`;
+          }
+        } else {
+          // Log the friendly message from the server on why it failed
+          console.warn(`Could not load image for ${menu.richMenuId}: ${imageResult.data.message}`);
+        }
+      } catch (error) {
+        // This case handles if the callable function itself fails
+        console.error(`Error calling downloadRichMenuImage for ${menu.richMenuId}:`, error);
+      }
+      
+      return `
+        <tr>
+          <td class="text-center align-middle" style="width: 200px;">${imageCellHtml}</td>
+          <td class="align-middle">${menu.name}</td>
+          <td class="align-middle"><small>${menu.richMenuId}</small></td>
+          <td class="align-middle">${menu.size.width}x${menu.size.height}</td>
+          <td class="align-middle">
+            <button class="btn btn-sm btn-info btn-edit-rich-menu" data-id="${menu.richMenuId}">編集</button>
+            <button class="btn btn-sm btn-danger btn-delete-rich-menu" data-id="${menu.richMenuId}">削除</button>
+          </td>
+        </tr>
+      `;
+    });
+
+    const rowsHtml = (await Promise.all(rowPromises)).join('');
+    tableBody.innerHTML = rowsHtml;
+
+    // Re-add event listeners
+    document.querySelectorAll('.btn-delete-rich-menu').forEach(button => {
+        button.addEventListener('click', handleDeleteRichMenu);
+    });
+    document.querySelectorAll('.btn-edit-rich-menu').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const richMenuId = e.target.dataset.id;
+            loadPage('rich-menu-editor', { richMenuId });
+        });
+    });
+
+  } catch (error) {
+    console.error('Error loading rich menu list:', error);
+    tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">リッチメニューの読み込みに失敗しました: ${error.message}</td></tr>`;
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+// リッチメニューの削除処理
+async function handleDeleteRichMenu(event) {
+    const richMenuId = event.target.dataset.id;
+    if (!confirm(`リッチメニュー「${richMenuId}」を削除しますか？この操作は元に戻せません。`)) {
+        return;
+    }
+    try {
+        const deleteRichMenu = functions.httpsCallable('deleteRichMenu');
+        await deleteRichMenu({ richMenuId });
+        alert('リッチメニューを削除しました。');
+        loadRichMenuList(); // リストを再読み込み
+    } catch (error) {
+        console.error('Error deleting rich menu:', error);
+        alert(`リッチメニューの削除中にエラーが発生しました: ${error.message}`);
+    }
+}

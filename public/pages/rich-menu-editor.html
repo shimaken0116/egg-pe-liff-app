@@ -1,0 +1,82 @@
+<!-- Rich Menu Editor/Builder Page -->
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+  <h1 class="h2" id="editor-title">リッチメニューエディタ</h1>
+  <div class="btn-toolbar mb-2 mb-md-0">
+    <button type="button" class="btn btn-secondary me-2" id="backToRichMenuListButton">
+      <span data-feather="arrow-left"></span>
+      一覧に戻る
+    </button>
+    <button type="button" class="btn btn-primary" id="saveRichMenuButton">
+      <span data-feather="save"></span>
+      保存
+    </button>
+  </div>
+</div>
+
+<div class="row">
+  <!-- Left Panel: Editor Settings -->
+  <div class="col-md-4">
+    <h4>設定</h4>
+    <form id="richMenuSettingsForm">
+      <div class="mb-3">
+        <label for="richMenuName" class="form-label">リッチメニュー名</label>
+        <input type="text" class="form-control" id="richMenuName" placeholder="例: 通常メニュー" required>
+      </div>
+      <div class="mb-3">
+        <label for="chatBarText" class="form-label">チャットバーのテキスト</label>
+        <input type="text" class="form-control" id="chatBarText" placeholder="例: メニュー" required>
+      </div>
+      <div class="mb-3">
+        <label for="richMenuImageUpload" class="form-label">背景画像</label>
+        <input class="form-control" type="file" id="richMenuImageUpload" accept="image/jpeg, image/png">
+      </div>
+    </form>
+    <hr>
+    <h4>タップ領域</h4>
+    <div id="tappable-areas-list">
+      <!-- Tappable areas will be listed here -->
+    </div>
+     <button class="btn btn-success btn-sm mt-2" id="add-area-button">
+        <span data-feather="plus-circle"></span> エリアを追加
+    </button>
+  </div>
+
+  <!-- Right Panel: Visual Editor -->
+  <div class="col-md-8">
+    <h4>プレビュー</h4>
+    <div id="rich-menu-editor-container" style="position: relative; width: 100%; max-width: 800px; border: 1px solid #ccc; background-color: #f8f9fa; overflow: hidden;">
+       <img id="rich-menu-image-preview" src="" style="width: 100%; display: block;" />
+       <!-- Tappable areas will be rendered here -->
+    </div>
+  </div>
+</div>
+
+<!-- Modal for editing tappable area action -->
+<div class="modal fade" id="actionEditorModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">アクションを編集</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editingAreaId">
+        <div class="mb-3">
+          <label for="actionType" class="form-label">アクション種別</label>
+          <select class="form-select" id="actionType">
+            <option value="uri">URLを開く</option>
+            <option value="message">テキストを送信</option>
+            <option value="postback">ポストバックイベント</option>
+          </select>
+        </div>
+        <div id="action-fields">
+          <!-- Fields for specific action types will be injected here -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="save-action-button">保存</button>
+      </div>
+    </div>
+  </div>
+</div> 

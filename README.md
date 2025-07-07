@@ -1,45 +1,122 @@
-# PROGRAM EGG LINE拡張アプリケーション
+# PROGRAM EGG LINE拡張機能
 
 ## 1. 概要
 
-このプロジェクトは、会員制エンタメレッスンサービス「PROGRAM EGG」の会員向けに、LINE公式アカウントの機能を拡張するアプリケーションを開発するものです。Lステップなどの既存サービスを参考に、会員とのコミュニケーションを円滑にし、エンゲージメントを高めることを目的とします。
+会員制エンタメレッスンサービス「PROGRAM EGG」のLINE公式アカウントの機能を拡張するためのバックエンドおよびフロントエンドアプリケーションです。
 
-## 2. 主な機能 (MVP)
+FirebaseとLINE Messaging APIを全面的に活用し、CRM機能、セグメントメッセージ配信、LIFFアプリケーションによる申し込みフォーム、管理者向けWebページなどを提供します。
 
-### 2.1. 顧客管理 (CRM)
-- **友だち情報管理:** LINEの友だち情報をFirestoreに保存し、会員情報と紐付けます。
-- **タグ・カスタムフィールド:** 「受講クラス」などの情報をタグとして管理し、柔軟な顧客セグメントを作成します。
-- **対応ステータス管理:** 会員からの問い合わせ状況などを管理します。
+## 2. 主な機能
 
-### 2.2. メッセージング
-- **セグメント配信:** 「受講クラス」などのタグ情報を元に、ターゲットを絞り込んだメッセージを配信します。
-- **チャットボット:** 簡単なキーワードに対して自動で応答するチャットボットを設置します。
+- **LINEユーザー情報管理 (CRM)**
+  - 友だち追加・ブロックを自動検知し、ユーザー情報をFirestoreに保存。
+  - ユーザーに「新規」「会員」などのタグを付与し、顧客管理を容易に。
 
-### 2.3. コンテンツ
-- **動的リッチメニュー:** 「受講クラス」などの会員属性に応じて、表示されるリッチメニューを動的に切り替えます。
-- **LIFFフォーム:** 特別レッスンの申し込みやアンケートなどに利用できるWebフォームをLIFFアプリとして提供します。
+- **セグメントメッセージ配信**
+  - 管理者ページから、特定のタグを持つユーザーに絞ってメッセージを一括送信。
 
-### 2.4. 管理者ページ
-- **顧客管理機能:** 会員の一覧表示、プロフィール、タグ、対応ステータスの確認・編集機能。
-- **メッセージ配信機能:** 管理画面からセグメントを選択し、手動でメッセージを配信する機能。
-- **フォーム管理機能:** LIFFフォームからの申込内容を一覧で確認する機能。
+- **LIFF (LINE Front-end Framework)**
+  - LINEアプリ内で動作するレッスン申し込みフォーム。
+  - フォーム送信内容はFirestoreに自動で記録されます。
 
-## 3. 技術スタック
-- **バックエンド:** Cloud Functions for Firebase (Node.js)
-- **データベース:** Cloud Firestore
-- **フロントエンド (LIFF):** Firebase Hosting
-- **LINE連携:** Messaging API
+- **リッチメニューの動的切替**
+  - ユーザーの`tags`フィールドに「会員」が含まれるかどうかに応じて、表示されるリッチメニューを自動で切り替えます。
+
+- **管理者向けWebページ**
+  - **認証**: Googleアカウントでログインすることで、関係者以外はアクセスできないように保護されています。
+  - **機能**:
+    - 会員情報（タグ含む）の一覧表示と編集。
+    - メッセージの手動配信。
+    - LIFFフォームからの申込内容の閲覧。
+
+- **簡易チャットボット**
+  - 特定のキーワード（例：「こんにちは」）に対して自動で応答します。
+
+## 3. 使用技術
+
+- **バックエンド**: Cloud Functions for Firebase (Node.js)
+- **データベース**: Cloud Firestore
+- **フロントエンド**: Firebase Hosting (HTML, CSS, JavaScript)
+- **認証**: Firebase Authentication (Google Sign-In, Anonymous Sign-In)
+- **LINE Platform**: Messaging API, LIFF
 
 ## 4. プロジェクト構成
+
 ```
-egg-pe-liff-app/
-├── functions/      # Cloud Functions for Firebase
-│   ├── index.js    # メインの処理
+.
+├── docs/
+│   └── TROUBLESHOOTING.md  # 開発時の問題と解決策をまとめたドキュメント
+├── functions/              # Cloud Functions (バックエンド) のソースコード
+│   ├── index.js
 │   └── package.json
-├── public/         # Firebase Hosting (LIFFアプリ)
-│   ├── admin/      # 管理者ページ用ファイル
-│   │   └── index.html
-│   └── index.html  # LIFFアプリのHTML
-├── firebase.json   # Firebase設定
-└── .gitignore      # Git管理対象外設定
-``` 
+├── public/                 # Firebase Hosting (フロントエンド) の公開ファイル
+│   ├── admin.html          # 管理者ページ
+│   └── liff-form.html      # LIFF申し込みフォーム
+├── firebase.json           # Firebaseのデプロイ設定
+├── .firebaserc             # Firebaseプロジェクトのエイリアス設定
+└── README.md               # このファイル
+```
+
+## 5. 環境構築
+
+新しい環境で開発を始める際の手順です。
+
+### 5-1. 前提ツール
+- [Node.js](https://nodejs.org/) (v22)
+- [npm](https://www.npmjs.com/) (Node.jsに付属)
+- [Firebase CLI](https://firebase.google.com/docs/cli)
+
+### 5-2. セットアップ手順
+
+1.  **リポジトリのクローン**
+    ```bash
+    git clone <repository_url>
+    cd egg-pe-liff-app
+    ```
+
+2.  **Firebaseへのログイン**
+    ```bash
+    firebase login
+    ```
+
+3.  **Firebaseプロジェクトの選択**
+    このリポジトリは既に`egg-pe-liff-app`プロジェクトに紐付いています。以下のコマンドで確認できます。
+    ```bash
+    firebase use
+    ```
+    
+4.  **バックエンドの依存関係をインストール**
+    ```bash
+    cd functions
+    npm install
+    ```
+
+5.  **LINEの機密情報を設定**
+    Cloud FunctionsからLINE APIを呼び出すために、チャネルアクセストークンとチャネルシークレットをFirebaseのSecret Managerに設定します。**これらの値は絶対にGitリポジトリに含めないでください。**
+
+    LINE Developersコンソールから取得した値を、以下のコマンドで設定します。
+    ```bash
+    # <YOUR_...> の部分を実際の値に置き換えてください
+    firebase functions:secrets:set LINE_ACCESS_TOKEN
+    firebase functions:secrets:set LINE_CHANNEL_SECRET
+    ```
+    コマンド実行後、プロンプトに従って値を入力します。
+
+## 6. デプロイ
+
+変更を本番環境に反映させるためのコマンドです。
+
+- **全ての変更をデプロイ**
+  ```bash
+  firebase deploy
+  ```
+
+- **Cloud Functionsのみデプロイ**
+  ```bash
+  firebase deploy --only functions
+  ```
+
+- **Webフロントエンド(Hosting)のみデプロイ**
+  ```bash
+  firebase deploy --only hosting
+  ``` 

@@ -1,0 +1,85 @@
+<!-- Rich Menu Management Page -->
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+  <h1 class="h2">リッチメニュー管理</h1>
+  <div class="btn-toolbar mb-2 mb-md-0">
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createRichMenuModal">
+      <span data-feather="plus"></span>
+      新規作成
+    </button>
+  </div>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-striped table-sm" id="richMenuListTable">
+    <thead>
+      <tr>
+        <th scope="col">プレビュー</th>
+        <th scope="col">名前</th>
+        <th scope="col">ID</th>
+        <th scope="col">サイズ</th>
+        <th scope="col">アクション</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- リッチメニューのリストがここに挿入される -->
+    </tbody>
+  </table>
+  <div id="loading-spinner" class="d-flex justify-content-center mt-3">
+    <div class="spinner-border" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+  </div>
+</div>
+
+
+<!-- Create Rich Menu Modal -->
+<div class="modal fade" id="createRichMenuModal" tabindex="-1" aria-labelledby="createRichMenuModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="createRichMenuModalLabel">リッチメニューを新規作成</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="createRichMenuForm">
+          <div class="mb-3">
+            <label for="richMenuJson" class="form-label">リッチメニュー定義 (JSON)</label>
+            <p class="form-text">LINEの<a href="https://developers.line.biz/ja/reference/messaging-api/#rich-menu-object" target="_blank">リッチメニューオブジェクト</a>の仕様に従ってJSONを入力してください。</p>
+            <textarea class="form-control" id="richMenuJson" rows="15" required>{
+  "size": {
+    "width": 2500,
+    "height": 1686
+  },
+  "selected": false,
+  "name": "My Default Rich Menu",
+  "chatBarText": "タップしてメニューを開く",
+  "areas": [
+    {
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 2500,
+        "height": 1686
+      },
+      "action": {
+        "type": "uri",
+        "uri": "https://www.line-community.me/"
+      }
+    }
+  ]
+}</textarea>
+          </div>
+          <div class="mb-3">
+            <label for="richMenuImage" class="form-label">背景画像</label>
+            <p class="form-text">対応形式: JPEGまたはPNG。最大ファイルサイズ: 1MB。</p>
+            <input class="form-control" type="file" id="richMenuImage" accept="image/jpeg, image/png" required>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="submitCreateRichMenu">作成</button>
+      </div>
+    </div>
+  </div>
+</div> 

@@ -522,4 +522,170 @@ exports.getUserDetails = onCall(
       throw new functions.https.HttpsError("internal", "Failed to get user details.", error);
     }
   }
+);
+
+/**
+ * =================================================================
+ * リッチメニュー管理 (Rich Menu)
+ * =================================================================
+ */
+
+// LINEクライアントを初期化するヘルパー関数
+const getLineClient = () => {
+  const lineConfig = {
+    channelAccessToken: process.env.LINE_ACCESS_TOKEN,
+    channelSecret: process.env.LINE_CHANNEL_SECRET,
+  };
+  if (!lineConfig.channelAccessToken || !lineConfig.channelSecret) {
+    throw new functions.https.HttpsError("internal", "LINE APIの環境変数が設定されていません。");
+  }
+  return new line.Client(lineConfig);
+};
+
+/**
+ * リッチメニューの一覧を取得する
+ */
+exports.getRichMenuList = onCall(
+  {
+    region: "asia-northeast1",
+    secrets: ["LINE_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"],
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    try {
+      const client = getLineClient();
+      const richMenus = await client.getRichMenuList();
+      return { richMenus };
+    } catch (error) {
+      logger.error("Failed to get rich menu list", error);
+      throw new functions.https.HttpsError("internal", "Failed to get rich menu list.", error.originalError?.response?.data || error);
+    }
+  }
+);
+
+/**
+ * リッチメニューを作成する
+ */
+exports.createRichMenu = onCall(
+  {
+    region: "asia-northeast1",
+    secrets: ["LINE_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"],
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    const { richMenu } = request.data;
+    if (!richMenu) {
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'richMenu' object.");
+    }
+    try {
+      const client = getLineClient();
+      const richMenuId = await client.createRichMenu(richMenu);
+      return { richMenuId };
+    } catch (error) {
+      logger.error("Failed to create rich menu", error);
+      throw new functions.https.HttpsError("internal", "Failed to create rich menu.", error.originalError?.response?.data || error);
+    }
+  }
+);
+
+/**
+ * リッチメニューを削除する
+ */
+exports.deleteRichMenu = onCall(
+  {
+    region: "asia-northeast1",
+    secrets: ["LINE_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"],
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    const { richMenuId } = request.data;
+    if (!richMenuId) {
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'richMenuId'.");
+    }
+    try {
+      const client = getLineClient();
+      await client.deleteRichMenu(richMenuId);
+      return { success: true };
+    } catch (error) {
+      logger.error(`Failed to delete rich menu ${richMenuId}`, error);
+      throw new functions.https.HttpsError("internal", "Failed to delete rich menu.", error.originalError?.response?.data || error);
+    }
+  }
+);
+
+/**
+ * リッチメニューの画像をアップロードする
+ */
+exports.uploadRichMenuImage = onCall(
+  {
+    region: "asia-northeast1",
+    secrets: ["LINE_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"],
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    const { richMenuId, imageBase64, contentType } = request.data;
+    if (!richMenuId || !imageBase64 || !contentType) {
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'richMenuId', 'imageBase64', and 'contentType'.");
+    }
+    try {
+      const client = getLineClient();
+      // Base64からBufferに変換
+      const buffer = Buffer.from(imageBase64, 'base64');
+      await client.setRichMenuImage(richMenuId, buffer, contentType);
+      return { success: true };
+    } catch (error) {
+      logger.error(`Failed to upload image for rich menu ${richMenuId}`, error);
+      throw new functions.https.HttpsError("internal", "Failed to upload rich menu image.", error.originalError?.response?.data || error);
+    }
+  }
+);
+
+/**
+ * リッチメニューの画像を取得する (Base64で返す)
+ */
+exports.downloadRichMenuImage = onCall(
+  {
+    region: "asia-northeast1",
+    secrets: ["LINE_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"],
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    const { richMenuId } = request.data;
+    if (!richMenuId) {
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'richMenuId'.");
+    }
+    try {
+      const client = getLineClient();
+      const stream = await client.getRichMenuImage(richMenuId);
+      
+      // StreamからBufferに変換
+      const chunks = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+      const buffer = Buffer.concat(chunks);
+      
+      // BufferからBase64に変換して返す
+      return { imageBase64: buffer.toString('base64') };
+
+    } catch (error) {
+      logger.error(`Failed to download image for rich menu ${richMenuId}`, error);
+      throw new functions.https.HttpsError("internal", "Failed to download rich menu image.", error.originalError?.response?.data || error);
+    }
+  }
 ); 

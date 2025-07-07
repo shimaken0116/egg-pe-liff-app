@@ -41,7 +41,6 @@ body, html {
 #main-container {
     display: flex;
     height: 100%;
-    position: relative;
 }
 
 #sidebar {
@@ -51,6 +50,7 @@ body, html {
     display: flex;
     flex-direction: column;
     height: 100%;
+    flex-shrink: 0;
 }
 
 #sidebar header {
@@ -121,13 +121,51 @@ body, html {
 }
 
 /* コンテンツエリアのスタイル */
-#content-area {
+#content-wrapper {
+    position: relative;
     flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+#content-area {
     padding: 30px;
     overflow-y: auto;
+    flex-grow: 1;
 }
 
 .welcome-message {
     text-align: center;
     color: #7f8c8d;
+}
+
+/* グローバルスピナーのスタイル */
+#global-spinner-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    /* 最初はJSで制御するため非表示にしておく */
+    display: none;
+}
+
+.spinner {
+    border: 5px solid rgba(0, 0, 0, 0.1);
+    border-left-color: #2c3e50;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1.2s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
 } 

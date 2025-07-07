@@ -3,9 +3,9 @@ body, html {
     margin: 0;
     padding: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background-color: #f4f7f6;
+    background-color: #ffffff; /* 白 */
     height: 100%;
-    color: #333;
+    color: #333; /* デフォルトの黒 */
 }
 
 #app-container {
@@ -23,8 +23,8 @@ body, html {
 }
 
 #loginButton {
-    background-color: #4285F4;
-    color: white;
+    background-color: #f0bf1b; /* 黄色 */
+    color: #2b2b2b; /* 黒 */
     border: none;
     padding: 12px 24px;
     font-size: 16px;
@@ -45,8 +45,8 @@ body, html {
 
 #sidebar {
     width: 240px;
-    background-color: #2c3e50;
-    color: #ecf0f1;
+    background-color: #f8f9fa; /* Bootstrapのlightグレー */
+    color: #333;
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -55,7 +55,7 @@ body, html {
 
 #sidebar header {
     padding: 20px;
-    border-bottom: 1px solid #34495e;
+    border-bottom: 1px solid #dee2e6;
     text-align: center;
 }
 
@@ -90,25 +90,25 @@ body, html {
 #global-nav ul li a {
     display: block;
     padding: 15px 20px;
-    color: #ecf0f1;
+    color: #333;
     text-decoration: none;
     transition: background-color 0.3s;
-    border-bottom: 1px solid #34495e;
+    border-bottom: 1px solid #dee2e6;
 }
 
 #global-nav ul li a:hover, #global-nav ul li a.active {
-    background-color: #34495e;
+    background-color: #e9ecef;
 }
 
 #sidebar footer {
     padding: 20px;
-    border-top: 1px solid #34495e;
+    border-top: 1px solid #dee2e6;
 }
 
 #logoutButton {
     width: 100%;
     padding: 10px;
-    background-color: #e74c3c;
+    background-color: #6c757d;
     color: white;
     border: none;
     border-radius: 4px;
@@ -117,7 +117,7 @@ body, html {
 }
 
 #logoutButton:hover {
-    background-color: #c0392b;
+    background-color: #5a6268;
 }
 
 /* コンテンツエリアのスタイル */
@@ -136,7 +136,7 @@ body, html {
 
 .welcome-message {
     text-align: center;
-    color: #7f8c8d;
+    color: #6c757d;
 }
 
 /* グローバルスピナーのスタイル */
@@ -157,7 +157,7 @@ body, html {
 
 .spinner {
     border: 5px solid rgba(0, 0, 0, 0.1);
-    border-left-color: #2c3e50;
+    border-left-color: #0d6efd; /* BootstrapのPrimaryカラー */
     border-radius: 50%;
     width: 50px;
     height: 50px;

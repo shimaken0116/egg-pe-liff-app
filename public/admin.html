@@ -22,16 +22,16 @@
         </div>
     </div>
 
-    <header class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
+    <div id="app-container" class="d-flex flex-column vh-100">
         <!-- ログイン画面 -->
-        <div id="login-container" class="full-screen-center">
+        <div id="login-container" class="full-screen-center flex-grow-1">
             <h1>管理者コンソール</h1>
             <p>操作を行うにはログインしてください。</p>
             <button id="loginButton">Googleでログイン</button>
         </div>
 
         <!-- メイン画面 (ログイン後に表示) -->
-        <div id="main-container" style="display: none;">
+        <div id="main-container" class="d-flex flex-grow-1" style="display: none;">
             <aside id="sidebar">
                 <header>
                     <h2>メニュー</h2>
@@ -63,7 +63,7 @@
                     <button id="logoutButton">ログアウト</button>
                 </footer>
             </aside>
-            <main id="content-area">
+            <main id="content-area" class="flex-grow-1">
                 <!-- ここに各機能のHTMLが動的に読み込まれる -->
                 <div class="welcome-message">
                     <h1>ようこそ！</h1>

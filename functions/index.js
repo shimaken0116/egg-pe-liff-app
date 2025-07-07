@@ -695,4 +695,44 @@ exports.downloadRichMenuImage = onCall(
       return { success: false, message: `Image not found or an error occurred for ${richMenuId}.` };
     }
   }
+);
+
+/**
+ * 個別のリッチメニューを取得する
+ */
+exports.getRichMenu = onCall(
+  {
+    region: "asia-northeast1",
+    secrets: ["LINE_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"],
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "The function must be called while authenticated."
+      );
+    }
+    const { richMenuId } = request.data;
+    if (!richMenuId) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "The function must be called with 'richMenuId'."
+      );
+    }
+    try {
+      const client = getLineClient();
+      const richMenu = await client.getRichMenu(richMenuId);
+      return { richMenu };
+    } catch (error) {
+      logger.error(`Failed to get rich menu ${richMenuId}`, {
+        errorMessage: error.message,
+        originalError: error.originalError?.response?.data,
+      });
+      throw new functions.https.HttpsError(
+        "internal",
+        `Failed to get rich menu ${richMenuId}.`
+      );
+    }
+  }
 ); 

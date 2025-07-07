@@ -6,6 +6,16 @@ import 'https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js';
 let auth;
 let functions;
 
+// --- Utility Functions (moved to global scope) ---
+function showLoading() {
+  const spinner = document.getElementById('loading-spinner') || document.getElementById('global-spinner');
+  if(spinner) spinner.style.display = 'flex';
+}
+function hideLoading() {
+  const spinner = document.getElementById('loading-spinner') || document.getElementById('global-spinner');
+  if(spinner) spinner.style.display = 'none';
+}
+
 document.addEventListener('DOMContentLoaded', async (event) => {
     try {
         const firebaseConfig = await (await fetch('/__/firebase/init.json')).json();
@@ -495,13 +505,19 @@ document.addEventListener('DOMContentLoaded', async (event) => {
             'tags': initTagsPage,
             'user-detail': initUserDetailPage,
             'rich-menu-list': loadRichMenuList,
+            'rich-menu-editor': () => {} // Do nothing, handled by module in HTML
         };
         
         let currentPage = '';
         const eventListeners = new AbortController(); // イベントリスナーを管理
 
         const loadPage = async (page, params = {}) => {
+            if (page === 'rich-menu-editor') {
+                window.currentPageParams = params;
+            }
+
             try {
+                showLoading();
                 const response = await fetch(`pages/${page}.html`);
                 if (!response.ok) throw new Error(`ページの読み込みに失敗しました: ${response.statusText}`);
                 
@@ -509,13 +525,13 @@ document.addEventListener('DOMContentLoaded', async (event) => {
 
                 if (pageInitializers[page]) {
                     pageInitializers[page](params);
-                } else if (page === 'rich-menu-editor' && window.richMenuEditor) {
-                    window.richMenuEditor.init(params);
                 }
 
             } catch (error) {
                 console.error('Page loading error:', error);
                 contentArea.innerHTML = `<p style="color: red;">${error.message}</p>`;
+            } finally {
+                hideLoading();
             }
         };
 
@@ -568,11 +584,10 @@ document.addEventListener('DOMContentLoaded', async (event) => {
 // リッチメニューリストを読み込んで表示する
 async function loadRichMenuList() {
   const tableBody = document.querySelector('#richMenuListTable tbody');
-  const spinner = document.getElementById('loading-spinner');
-  if (!tableBody || !spinner) return;
+  if (!tableBody) return;
 
   tableBody.innerHTML = '';
-  spinner.style.display = 'flex';
+  showLoading(); // Use global function
 
   try {
     const getRichMenuList = functions.httpsCallable('getRichMenuList');
@@ -581,7 +596,6 @@ async function loadRichMenuList() {
 
     if (richMenus.length === 0) {
       tableBody.innerHTML = '<tr><td colspan="5" class="text-center">リッチメニューがありません。</td></tr>';
-      spinner.style.display = 'none';
       return;
     }
     
@@ -641,7 +655,7 @@ async function loadRichMenuList() {
     console.error('Error loading rich menu list:', error);
     tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">リッチメニューの読み込みに失敗しました: ${error.message}</td></tr>`;
   } finally {
-    spinner.style.display = 'none';
+    hideLoading(); // Use global function
   }
 }
 

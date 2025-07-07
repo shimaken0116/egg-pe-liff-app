@@ -79,4 +79,18 @@
       </div>
     </div>
   </div>
-</div> 
+</div>
+
+<script type="module">
+  import { init } from '../js/pages/rich-menu-editor.js';
+  
+  // Get params from the main script's context if available, or from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const richMenuId = urlParams.get('richMenuId'); // This needs to be passed correctly
+  
+  // This is a bit of a workaround. Ideally admin.js would pass params.
+  // We'll retrieve it from the context it was loaded from.
+  const pageParams = window.currentPageParams || {};
+
+  init(pageParams);
+</script> 

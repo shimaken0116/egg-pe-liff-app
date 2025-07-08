@@ -54,15 +54,36 @@ class LINEClient {
         try {
             // Convert base64 string to a Buffer, which axios can handle as binary data.
             const imageBuffer = Buffer.from(imageBase64, 'base64');
+            const accessToken = await this.getAccessToken();
             
-            await this.axios.post(`/richmenu/${richMenuId}/content`, imageBuffer, {
+            // Use the data-specific endpoint, not the default baseURL from the axios instance.
+            await axios.post(`https://api-data.line.me/v2/bot/richmenu/${richMenuId}/content`, imageBuffer, {
                 headers: { 
+                    'Authorization': `Bearer ${accessToken}`,
                     'Content-Type': contentType,
                     'Content-Length': imageBuffer.length
                 }
             });
         } catch (error) {
             this.handleError(error, 'uploadRichMenuImage');
+        }
+    }
+
+    async downloadRichMenuImage(richMenuId) {
+        try {
+            const accessToken = await this.getAccessToken();
+            const response = await axios.get(`https://api-data.line.me/v2/bot/richmenu/${richMenuId}/content`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` },
+                responseType: 'arraybuffer' // Get binary data as an ArrayBuffer
+            });
+            // Convert the binary data to a Base64 string to send to the client
+            return Buffer.from(response.data, 'binary').toString('base64');
+        } catch (error) {
+            if (error.response?.status === 404) {
+                logger.warn(`No image found for rich menu ${richMenuId}.`);
+                return null; // Return null if no image is found, not an error.
+            }
+            this.handleError(error, 'downloadRichMenuImage');
         }
     }
     

@@ -618,40 +618,27 @@ exports.uploadRichMenuImage = onCall(FUNCTION_CONFIG, async (request) => {
  * リッチメニューの画像を取得する (Base64で返す)
  */
 exports.downloadRichMenuImage = onCall(FUNCTION_CONFIG, async (request) => {
-    // Add version marker and detailed logging
-    logger.info(`[v2] downloadRichMenuImage called for richMenuId: ${request.data.richMenuId}`);
+    logger.info(`downloadRichMenuImage called for richMenuId: ${request.data.richMenuId}`);
 
     if (!request.auth) {
-        logger.warn("[v2] Function called without authentication.");
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
     const { richMenuId } = request.data;
     if (!richMenuId) {
-        logger.warn("[v2] Function called without richMenuId.");
         throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'richMenuId'.");
     }
     try {
-        logger.info(`[v2] Attempting to get image for ${richMenuId}`);
-        const client = new line.Client({
-            channelAccessToken: process.env.LINE_ACCESS_TOKEN,
-            channelSecret: process.env.LINE_CHANNEL_SECRET,
-        });
-        const stream = await client.getRichMenuImage(richMenuId);
-        
-        const chunks = [];
-        for await (const chunk of stream) {
-            chunks.push(chunk);
+        const imageBase64 = await lineClient.downloadRichMenuImage(richMenuId);
+        if (imageBase64) {
+            logger.info(`Successfully downloaded image for ${richMenuId}.`);
+            return { success: true, imageBase64 };
+        } else {
+            logger.info(`Image not found for ${richMenuId}.`);
+            return { success: false, message: "Image not found." };
         }
-        const buffer = Buffer.concat(chunks);
-        
-        logger.info(`[v2] Successfully downloaded image for ${richMenuId}.`);
-        // 成功レスポンス
-        return { success: true, imageBase64: buffer.toString('base64') };
-
     } catch (error) {
-        logger.error(`[v2] Caught error for ${richMenuId}. Error message: ${error.message}. Returning success:false.`, { originalError: error });
-        // 失敗を示す成功レスポンス
-        return { success: false, message: `Image not found or an error occurred for ${richMenuId}.` };
+        logger.error(`Caught error in downloadRichMenuImage cloud function for ${richMenuId}.`, { originalError: error });
+        throw new functions.https.HttpsError("internal", "Failed to download rich menu image.", error.message);
     }
 });
 

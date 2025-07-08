@@ -550,22 +550,22 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                 await loadTags();
                 try {
                     const getMenu = functions.httpsCallable('getRichMenuDetails');
-                    const result = await getMenu({ richMenuId });
+                    const result = await getMenu({ menuId: richMenuId });
                     
-                    const { menuData, isLegacy } = result.data;
+                    const menuData = result.data;
 
-                    if (isLegacy) {
+                    if (menuData.warning) {
                         const warningDiv = document.createElement('div');
                         warningDiv.className = 'alert alert-warning mt-3';
                         warningDiv.role = 'alert';
-                        warningDiv.innerHTML = '<strong>要確認:</strong> このメニューは過去に作成されたものです。設定を確認し、保存して情報を更新してください。';
+                        warningDiv.innerHTML = `<strong><i class="bi bi-exclamation-triangle-fill"></i> 要確認:</strong> ${menuData.warning}`;
                         elements.title.parentElement.insertAdjacentElement('afterend', warningDiv);
                     }
                     
-                    // Populate state from the (potentially partial) menuData
+                    // Populate state from the menuData
                     state.richMenu = menuData;
-                    state.isDefault = menuData.isDefault;
-                    state.targetTags = menuData.targetTags;
+                    state.isDefault = menuData.isDefault || false;
+                    state.targetTags = menuData.tags || [];
 
                     // Populate form elements from state
                     elements.nameInput.value = state.richMenu.name || '';
@@ -584,11 +584,26 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                      
                     elements.preview.querySelectorAll('.action-area').forEach(areaEl => {
                         const areaId = areaEl.dataset.area;
-                        if ((state.richMenu.areas || []).find(a => a.bounds.x === 0)) { // Simple check if action exists
+                        // A simple check to see if an action is defined for this area.
+                        // This might need a more robust check based on your area definition.
+                        const areaLetter = areaId; // Assuming areaId is 'A', 'B', etc.
+                        if ((state.richMenu.areas || []).some(a => a.bounds.x === (areaLetter.charCodeAt(0) - 65) * (state.richMenu.size.width / 3))) {
                              areaEl.classList.add('configured');
                         }
                     });
-                    
+
+                    // If the menu has an image, try to load it
+                    if (menuData.lineRichMenuId) {
+                        const downloadImage = functions.httpsCallable('downloadRichMenuImage');
+                        downloadImage({ richMenuId: menuData.lineRichMenuId })
+                            .then(imageResult => {
+                                if (imageResult.data.success && imageResult.data.imageBase64) {
+                                    elements.preview.style.backgroundImage = `url(data:image/png;base64,${imageResult.data.imageBase64})`;
+                                    elements.preview.classList.add('has-image');
+                                }
+                            }).catch(e => console.warn("Could not load preview image.", e));
+                    }
+
                 } catch (error) {
                     console.error("Failed to load rich menu details:", error);
                     alert(`メニュー情報の読み込みに失敗しました: ${error.message}`);
@@ -638,7 +653,18 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                 state.isDefault = elements.isDefaultCheckbox.checked;
                 state.targetTags = Array.from(elements.tagsSelect.selectedOptions).map(o => o.value);
                 
-                if (!state.richMenu.name || !state.richMenu.chatBarText) {
+                // Construct the menu data for the backend in the expected format
+                const backendMenuData = {
+                    name: state.richMenu.name,
+                    chatBarText: state.richMenu.chatBarText,
+                    size: state.richMenu.size,
+                    selected: state.richMenu.selected,
+                    areas: state.richMenu.areas,
+                    tags: state.targetTags,
+                    isDefault: state.isDefault,
+                };
+
+                if (!backendMenuData.name || !backendMenuData.chatBarText) {
                     return alert("タイトルとメニューバーのテキストは必須です。");
                 }
                 
@@ -651,12 +677,8 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                 try {
                     const saveMenu = functions.httpsCallable('saveRichMenu');
                     const payload = {
-                        menuData: {
-                           richMenu: state.richMenu,
-                           isDefault: state.isDefault,
-                           targetTags: state.targetTags,
-                        },
-                        richMenuId: richMenuId || null,
+                        menuData: backendMenuData,
+                        existingMenuId: richMenuId || null,
                     };
                     
                     // We need to send image as base64 for functions

@@ -50,10 +50,16 @@ class LINEClient {
         }
     }
     
-    async uploadRichMenuImage(richMenuId, imageBuffer, contentType) {
+    async uploadRichMenuImage(richMenuId, imageBase64, contentType) {
         try {
+            // Convert base64 string to a Buffer, which axios can handle as binary data.
+            const imageBuffer = Buffer.from(imageBase64, 'base64');
+            
             await this.axios.post(`/richmenu/${richMenuId}/content`, imageBuffer, {
-                headers: { 'Content-Type': contentType }
+                headers: { 
+                    'Content-Type': contentType,
+                    'Content-Length': imageBuffer.length
+                }
             });
         } catch (error) {
             this.handleError(error, 'uploadRichMenuImage');

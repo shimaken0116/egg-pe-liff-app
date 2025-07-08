@@ -219,7 +219,60 @@ document.addEventListener('DOMContentLoaded', async (event) => {
             fetchSubmissions();
         };
 
-        const initMessagingPage = () => { /* ... placeholder ... */ };
+        const initMessagingPage = () => {
+            const tagInput = document.getElementById('tagInput');
+            const messageInput = document.getElementById('messageInput');
+            const sendMessageButton = document.getElementById('sendMessageButton');
+            const result = document.getElementById('result');
+
+            if (!tagInput || !messageInput || !sendMessageButton || !result) {
+                console.error('Messaging page elements not found');
+                return;
+            }
+
+            sendMessageButton.addEventListener('click', async () => {
+                const tag = tagInput.value.trim();
+                const message = messageInput.value.trim();
+
+                if (!tag || !message) {
+                    result.textContent = 'タグとメッセージの両方を入力してください。';
+                    result.className = 'text-danger';
+                    return;
+                }
+
+                sendMessageButton.disabled = true;
+                sendMessageButton.textContent = '送信中...';
+                result.textContent = '送信処理中...';
+                result.className = 'text-info';
+
+                try {
+                    const pushMessage = functions.httpsCallable('pushMessage');
+                    const response = await pushMessage({ 
+                        tag: tag,
+                        message: message
+                    });
+
+                    if (response.data.success) {
+                        result.textContent = `メッセージを送信しました。対象ユーザー数: ${response.data.targetUserCount || '不明'}人`;
+                        result.className = 'text-success';
+                        // Clear inputs on success
+                        tagInput.value = '';
+                        messageInput.value = '';
+                    } else {
+                        result.textContent = 'メッセージ送信に失敗しました: ' + (response.data.error || '不明なエラー');
+                        result.className = 'text-danger';
+                    }
+
+                } catch (error) {
+                    console.error('Push message error:', error);
+                    result.textContent = 'メッセージ送信に失敗しました: ' + error.message;
+                    result.className = 'text-danger';
+                } finally {
+                    sendMessageButton.disabled = false;
+                    sendMessageButton.textContent = 'メッセージ送信テスト';
+                }
+            });
+        };
         
         const initTagsPage = () => {
             const createTagButton = document.getElementById('createTagButton');

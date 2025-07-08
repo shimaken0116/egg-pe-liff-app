@@ -695,101 +695,124 @@ exports.getRichMenu = onCall(FUNCTION_CONFIG, async (request) => {
  * 特定のリッチメニューの詳細を取得する
  */
 exports.getRichMenuDetails = onCall(FUNCTION_CONFIG, async (request) => {
-    if (!request.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
-    }
-    
-    const { richMenuId } = request.data;
-    if (!richMenuId) {
-        throw new functions.https.HttpsError("invalid-argument", "The 'richMenuId' argument is required.");
-    }
+    if (!request.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
+    const { menuId } = request.data;
+    if (!menuId) throw new functions.https.HttpsError("invalid-argument", "menuId is required.");
 
     try {
-        const menuDocRef = db.collection('richMenus').doc(richMenuId);
-        const doc = await menuDocRef.get();
-
-        if (!doc.exists) {
-            throw new functions.https.HttpsError("not-found", `Rich menu with ID ${richMenuId} not found in Firestore.`);
+        const doc = await db.collection("richMenus").doc(menuId).get();
+        if (doc.exists) {
+            return { id: doc.id, ...doc.data() };
         }
 
-        return { success: true, menuData: doc.data() };
-
+        // Firestoreにない場合、LINE APIに問い合わせる
+        logger.warn(`Rich menu ${menuId} not found in Firestore. Trying to fetch from LINE API.`);
+        try {
+            const menuFromLine = await lineClient.getRichMenu(menuId);
+            // LINEに存在した場合、基本的な情報を返す
+            return {
+                id: menuId,
+                name: "（名称未設定）",
+                chatBarText: "（タップして開く）",
+                areas: [],
+                tags: [],
+                lineRichMenuId: menuId,
+                warning: "このリッチメニューはLINEには存在しますが、データベースに詳細がありません。設定を保存し直してください。",
+            };
+        } catch (lineError) {
+            logger.error(`Failed to fetch rich menu ${menuId} from LINE API as well.`, lineError.message);
+            throw new functions.https.HttpsError("not-found", `Rich menu with ID: ${menuId} not found.`);
+        }
     } catch (error) {
-        if (error instanceof functions.https.HttpsError) {
-            throw error;
-        }
-        logger.error(`Failed to get rich menu details for ${richMenuId}:`, error);
-        throw new functions.https.HttpsError("internal", "Failed to get rich menu details.", error.message);
+        logger.error("Error fetching rich menu details:", error);
+        if (error instanceof functions.https.HttpsError) throw error;
+        throw new functions.https.HttpsError("internal", "Could not fetch rich menu details.");
     }
 });
 
 /**
- * リッチメニューを作成・更新する
+ * リッチメニューを作成または更新する
  */
 exports.saveRichMenu = onCall(FUNCTION_CONFIG, async (request) => {
-    if (!request.auth) throw new Error("Authentication required.");
-    const { richMenuId, menuData, imageBase64 } = request.data;
-    if (!menuData) {
-        throw new functions.https.HttpsError("invalid-argument", "The 'menuData' argument is required.");
+    if (!request.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
 
-    const lineConfig = {
-        channelAccessToken: process.env.LINE_ACCESS_TOKEN,
-        channelSecret: process.env.LINE_CHANNEL_SECRET,
-    };
-    const client = new line.Client(lineConfig);
+    const { menuData, imageBase64, imageType, existingMenuId } = request.data;
+
+    logger.info("saveRichMenu called with:", {
+        hasMenuData: !!menuData,
+        hasImage: !!imageBase64,
+        imageType,
+        existingMenuId,
+    });
 
     try {
-        let newRichMenuId = richMenuId;
+        let newRichMenuId;
 
-        // 1. If it's an existing menu, delete the old one first.
-        // LINE API doesn't support direct updates, so we replace it.
-        if (richMenuId) {
+        if (existingMenuId) {
+            // 既存メニューの更新フロー
+            logger.info(`Updating existing rich menu. Old ID: ${existingMenuId}`);
+
+            // 1. LINE上から古いメニューを削除 (存在すれば)
             try {
-                await client.deleteRichMenu(richMenuId);
-                logger.info(`Successfully deleted old rich menu: ${richMenuId}`);
-            } catch(e) {
-                // It might fail if the menu was already deleted from LINE's side.
-                // We can ignore this error and proceed.
-                logger.warn(`Could not delete rich menu ${richMenuId}. It might not exist on LINE's server.`, e.message);
+                await lineClient.deleteRichMenu(existingMenuId);
+                logger.info(`Successfully deleted old rich menu from LINE: ${existingMenuId}`);
+            } catch (error) {
+                if (error.message.includes("404")) {
+                    logger.info(`Old rich menu not found on LINE, proceeding to create a new one. ID: ${existingMenuId}`);
+                } else {
+                    logger.warn(`Could not delete old rich menu from LINE (${existingMenuId}), but proceeding anyway.`, error.message);
+                }
+            }
+
+            // 2. Firestore上から古いドキュメントを削除 (存在すれば)
+            const oldDocRef = db.collection("richMenus").doc(existingMenuId);
+            if ((await oldDocRef.get()).exists) {
+                await oldDocRef.delete();
+                logger.info(`Successfully deleted old rich menu from Firestore: ${existingMenuId}`);
             }
         }
 
-        // 2. Create a new rich menu object
-        const richMenuObject = {
-            size: menuData.size,
-            selected: menuData.selected,
-            name: menuData.name,
-            chatBarText: menuData.chatBarText,
-            areas: menuData.areas,
-        };
-        newRichMenuId = await client.createRichMenu(richMenuObject);
-        logger.info(`Successfully created new rich menu with id: ${newRichMenuId}`);
+        // 3. 新しいメニューをLINE上に作成
+        logger.info("Creating new rich menu on LINE with data:", menuData);
+        const createResponse = await lineClient.createRichMenu(menuData);
+        newRichMenuId = createResponse.richMenuId;
+        logger.info(`Successfully created new rich menu on LINE. New ID: ${newRichMenuId}`);
 
-        // 3. Upload image if provided
+
+        if (!newRichMenuId) {
+            // この状況はありえないはずだが、念のためチェック
+            throw new Error("Failed to get a new rich menu ID from LINE API.");
+        }
+
+        // 4. 画像が提供されていればアップロード
         if (imageBase64) {
-            // Remove the data URI prefix if it exists
-            const buffer = Buffer.from(imageBase64, 'base64');
-            await client.setRichMenuImage(newRichMenuId, buffer);
+            logger.info(`Uploading image to new rich menu ID: ${newRichMenuId}`);
+            await lineClient.uploadRichMenuImage(newRichMenuId, imageBase64, imageType);
             logger.info(`Successfully uploaded image for rich menu: ${newRichMenuId}`);
         }
 
-        // 4. Save metadata to Firestore
-        const menuDocRef = db.collection('richMenus').doc(newRichMenuId);
-        await menuDocRef.set({
-            ...menuData, // This contains name, chatBarText, size, areas, etc.
-            richMenuId: newRichMenuId, // ensure the new ID is stored
-            targetTags: menuData.targetTags || [], // Store the target tags
-            isDefault: menuData.isDefault || false, // Store default status
+        // 5. Firestoreに新しいメニュー情報を保存
+        const newMenuDoc = {
+            ...menuData,
+            lineRichMenuId: newRichMenuId,
+            tags: menuData.tags || [],
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        logger.info(`Rich menu ${newRichMenuId} metadata saved to Firestore.`);
-        
-        return { success: true, richMenuId: newRichMenuId };
+            hasImage: !!imageBase64,
+        };
+        await db.collection("richMenus").doc(newRichMenuId).set(newMenuDoc);
+        logger.info(`Successfully saved rich menu to Firestore. ID: ${newRichMenuId}`);
 
+        return { success: true, richMenuId: newRichMenuId };
     } catch (error) {
-        logger.error("Failed to save rich menu:", error);
-        throw new functions.https.HttpsError("internal", "Failed to save rich menu.", error.message);
+        logger.error("Error details in saveRichMenu:", {
+            message: error.message,
+            stack: error.stack,
+        });
+
+        const lineApiError = error.message.includes("LINE API Error") ? error.message : "An unexpected error occurred on the server.";
+        throw new functions.https.HttpsError("internal", "Failed to save rich menu.", { lineApiError });
     }
 }); 

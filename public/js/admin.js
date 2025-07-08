@@ -6,6 +6,8 @@ import 'https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js';
 let auth;
 let functions;
 
+const debug = true; // Set to true for verbose console logging
+
 // --- Utility Functions (global scope) ---
 function showLoading() {
   console.log("showLoading CALLED at " + new Error().stack.split("\n")[2].trim());
@@ -461,14 +463,13 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                 richMenu: {
                     name: '',
                     chatBarText: '',
-                    selected: true, // This is always true for the selected menu
-                    size: { width: 2500, height: 1686 }, // Default: large
+                    selected: true,
+                    size: { width: 2500, height: 1686 },
                     areas: []
                 },
                 isDefault: false,
                 targetTags: [],
-                imageData: null, // Will hold base64 string
-                imageFile: null  // Will hold file object
+                imageFile: null  // Will hold file object with { file, type }
             };
             
             elements.backButton.addEventListener('click', () => loadPage('rich-menu-list'));
@@ -551,26 +552,47 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                     const getMenu = functions.httpsCallable('getRichMenuDetails');
                     const result = await getMenu({ richMenuId });
                     
-                    // Combine the loaded data into a single object for populating the form
-                    const loadedData = {
-                      ...result.data.menuData.richMenu,
-                      isDefault: result.data.menuData.isDefault,
-                      targetTags: result.data.menuData.targetTags
-                    };
+                    const { menuData, isLegacy } = result.data;
+
+                    if (isLegacy) {
+                        const warningDiv = document.createElement('div');
+                        warningDiv.className = 'alert alert-warning mt-3';
+                        warningDiv.role = 'alert';
+                        warningDiv.innerHTML = '<strong>要確認:</strong> このメニューは過去に作成されたものです。設定を確認し、保存して情報を更新してください。';
+                        elements.title.parentElement.insertAdjacentElement('afterend', warningDiv);
+                    }
                     
-                    populateForm(loadedData);
-                    state = loadedData; // Overwrite state with loaded data
+                    // Populate state from the (potentially partial) menuData
+                    state.richMenu = menuData;
+                    state.isDefault = menuData.isDefault;
+                    state.targetTags = menuData.targetTags;
+
+                    // Populate form elements from state
+                    elements.nameInput.value = state.richMenu.name || '';
+                    elements.chatBarInput.value = state.richMenu.chatBarText || '';
+                    elements.isDefaultCheckbox.checked = state.isDefault;
+
+                    const template = (state.richMenu.size && state.richMenu.size.height === 843) ? 'compact_4' : 'large_6';
+                    elements.templateSelector.querySelectorAll('button').forEach(btn => {
+                        btn.classList.toggle('active', btn.dataset.template === template);
+                    });
+                    renderActionAreas(template);
+                    
+                    Array.from(elements.tagsSelect.options).forEach(option => {
+                        option.selected = (state.targetTags || []).includes(option.value);
+                    });
+                     
+                    elements.preview.querySelectorAll('.action-area').forEach(areaEl => {
+                        const areaId = areaEl.dataset.area;
+                        if ((state.richMenu.areas || []).find(a => a.bounds.x === 0)) { // Simple check if action exists
+                             areaEl.classList.add('configured');
+                        }
+                    });
                     
                 } catch (error) {
                     console.error("Failed to load rich menu details:", error);
-                    if (error.code === 'functions/not-found') {
-                        alert("このリッチメニューはLINEサーバーに存在しますが、データベースに詳細が保存されていません。お手数ですが、すべての項目を再設定し、保存してください。");
-                        elements.title.textContent = 'リッチメニューの編集（要再設定）';
-                        // Continue with a blank editor, allowing the user to save and create the DB entry.
-                    } else {
-                        alert(`メニュー情報の読み込みに失敗しました: ${error.message}`);
-                        loadPage('rich-menu-list');
-                    }
+                    alert(`メニュー情報の読み込みに失敗しました: ${error.message}`);
+                    loadPage('rich-menu-list');
                 } finally {
                     hideLoading();
                 }
@@ -599,7 +621,8 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                 const file = e.target.files[0];
                 if (!file) return;
 
-                state.imageFile = file; // We'll send the file directly
+                // Store the file object itself and its type
+                state.imageFile = { file: file, type: file.type }; 
 
                 const reader = new FileReader();
                 reader.onload = (readEvent) => {
@@ -637,8 +660,9 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                     };
                     
                     // We need to send image as base64 for functions
-                    if (state.imageFile) {
-                        payload.imageBase64 = await toBase64(state.imageFile);
+                    if (state.imageFile && state.imageFile.file) {
+                        payload.imageBase64 = await toBase64(state.imageFile.file);
+                        payload.imageType = state.imageFile.type;
                     }
 
                     await saveMenu(payload);
@@ -647,11 +671,98 @@ document.addEventListener('DOMContentLoaded', async (event) => {
 
                 } catch (error) {
                     console.error("Failed to save rich menu:", error);
-                    alert(`保存に失敗しました: ${error.message}`);
+                    if (error.details) {
+                        console.error("Server-side error details:", error.details);
+                    }
+                    alert(`保存に失敗しました。詳細はコンソールを確認してください。`);
                 } finally {
                     hideLoading();
                 }
             });
+        };
+
+        const initRichMenuListPage = () => {
+            if (debug) console.log("[DEBUG] Initializer called for: rich-menu-list");
+
+            const loadRichMenuList = async () => {
+                showLoading();
+                const tableBody = document.querySelector('#richMenuListTable tbody');
+                if (!tableBody) {
+                    console.error("Could not find table body for rich menu list.");
+                    hideLoading();
+                    return;
+                }
+                tableBody.innerHTML = '<tr><td colspan="5" class="text-center">読み込み中...</td></tr>';
+
+                try {
+                    const getList = functions.httpsCallable('getRichMenuList');
+                    const result = await getList();
+                    const menus = result.data.richMenus;
+
+                    if (!menus || menus.length === 0) {
+                        tableBody.innerHTML = '<tr><td colspan="5" class="text-center">登録されているリッチメニューはありません。</td></tr>';
+                        return;
+                    }
+
+                    tableBody.innerHTML = ''; // Clear loading message
+
+                    for (const menu of menus) {
+                        const row = tableBody.insertRow();
+
+                        const imageCell = row.insertCell();
+                        imageCell.className = 'text-center align-middle';
+                        imageCell.style.width = '200px';
+                        const img = document.createElement('img');
+                        img.alt = menu.name;
+                        img.className = 'img-fluid';
+                        img.style.maxWidth = '150px';
+                        img.style.maxHeight = '100px';
+                        img.src = 'https://via.placeholder.com/150x100.png?text=...'; // Placeholder
+                        imageCell.appendChild(img);
+
+                        const downloadImage = functions.httpsCallable('downloadRichMenuImage');
+                        downloadImage({ richMenuId: menu.richMenuId })
+                            .then(imageResult => {
+                                if (imageResult.data.success && imageResult.data.imageBase64) {
+                                    img.src = `data:image/png;base64,${imageResult.data.imageBase64}`;
+                                } else {
+                                    imageCell.innerHTML = `<small class="text-muted">画像なし</small>`;
+                                }
+                            })
+                            .catch(error => {
+                                console.error(`RPC failed for downloadRichMenuImage on ${menu.richMenuId}:`, error);
+                                imageCell.innerHTML = `<small class="text-danger">読込失敗</small>`;
+                            });
+                        
+                        row.insertCell().textContent = menu.name;
+                        row.insertCell().innerHTML = `<small>${menu.richMenuId}</small>`;
+                        row.insertCell().textContent = `${menu.size.width}x${menu.size.height}`;
+
+                        const actionsCell = row.insertCell();
+                        actionsCell.className = 'align-middle';
+                        actionsCell.innerHTML = `
+                            <button class="btn btn-sm btn-info btn-edit-rich-menu" data-id="${menu.richMenuId}">編集</button>
+                            <button class="btn btn-sm btn-danger btn-delete-rich-menu" data-id="${menu.richMenuId}">削除</button>
+                        `;
+                    }
+                } catch (error) {
+                    console.error("Failed to load rich menu list:", error);
+                    if(tableBody) tableBody.innerHTML = `<tr><td colspan="5" class="text-danger text-center">リストの読み込みに失敗しました: ${error.message}</td></tr>`;
+                } finally {
+                    if (debug) console.log("[DEBUG] Initializer's finally block reached. Calling hideLoading.");
+                    hideLoading();
+                }
+            };
+
+            loadRichMenuList();
+
+            // Event listener for the create button
+            const createButton = document.getElementById('createNewRichMenuButton');
+            if (createButton) {
+                createButton.addEventListener('click', () => {
+                    loadPage('rich-menu-editor', { richMenuId: null });
+                });
+            }
         };
 
         const pageInitializers = {
@@ -660,16 +771,7 @@ document.addEventListener('DOMContentLoaded', async (event) => {
             'submissions': initSubmissionsPage,
             'tags': initTagsPage,
             'messaging': initMessagingPage,
-            'rich-menu-list': async () => {
-                try {
-                    await loadRichMenuList();
-                } catch (e) {
-                    console.error("Failed to execute loadRichMenuList", e);
-                } finally {
-                    console.log("[DEBUG] Initializer's finally block reached. Calling hideLoading.");
-                    hideLoading();
-                }
-            },
+            'rich-menu-list': initRichMenuListPage,
             'rich-menu-editor': initRichMenuEditorPage,
         };
         window.pageInitializers = pageInitializers;
@@ -718,83 +820,5 @@ document.addEventListener('DOMContentLoaded', async (event) => {
     } catch (e) {
         console.error('App initialization failed:', e);
         document.body.innerHTML = 'アプリケーションの初期化に失敗しました。コンソールを確認してください。';
-    }
-
-    // =================================================================
-    // Rich Menu Management (Now inside DOMContentLoaded)
-    // =================================================================
-    async function loadRichMenuList() {
-      const tableBody = document.querySelector('#richMenuListTable tbody');
-      if (!tableBody) return;
-      tableBody.innerHTML = '<tr><td colspan="5" class="text-center">読み込み中...</td></tr>';
-
-      try {
-        const getRichMenuList = functions.httpsCallable('getRichMenuList');
-        const result = await getRichMenuList();
-        const richMenus = result.data.richMenus;
-
-        if (!richMenus || richMenus.length === 0) {
-          tableBody.innerHTML = '<tr><td colspan="5" class="text-center">リッチメニューがありません。</td></tr>';
-          return;
-        }
-        
-        const downloadRichMenuImage = functions.httpsCallable('downloadRichMenuImage');
-        const rowPromises = richMenus.map(async (menu) => {
-          let imageCellHtml = '<small class="text-muted">画像なし</small>';
-          try {
-            const imageResult = await downloadRichMenuImage({ richMenuId: menu.richMenuId });
-            if (imageResult.data.success && imageResult.data.imageBase64) {
-              imageCellHtml = `<img src="data:image/png;base64,${imageResult.data.imageBase64}" class="img-fluid" style="max-width: 150px; max-height: 100px;"/>`;
-            } else {
-              console.warn(`Could not load image for ${menu.richMenuId}: ${imageResult.data.message}`);
-            }
-          } catch (error) {
-            console.error(`Error calling downloadRichMenuImage for ${menu.richMenuId}:`, error);
-          }
-          
-          return `
-            <tr>
-              <td class="text-center align-middle" style="width: 200px;">${imageCellHtml}</td>
-              <td class="align-middle">${menu.name}</td>
-              <td class="align-middle"><small>${menu.richMenuId}</small></td>
-              <td class="align-middle">${menu.size.width}x${menu.size.height}</td>
-              <td class="align-middle">
-                <button class="btn btn-sm btn-info btn-edit-rich-menu" data-id="${menu.richMenuId}">編集</button>
-                <button class="btn btn-sm btn-danger btn-delete-rich-menu" data-id="${menu.richMenuId}">削除</button>
-              </td>
-            </tr>
-          `;
-        });
-
-        const rowsHtml = (await Promise.all(rowPromises)).join('');
-        tableBody.innerHTML = rowsHtml;
-
-        document.querySelectorAll('.btn-delete-rich-menu').forEach(button => {
-            button.addEventListener('click', handleDeleteRichMenu);
-        });
-        // Edit buttons are handled by event delegation on contentArea now.
-      } catch (error) {
-        console.error('Error loading rich menu list:', error);
-        tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">リッチメニューの読み込みに失敗しました: ${error.message}</td></tr>`;
-      }
-    }
-
-    async function handleDeleteRichMenu(event) {
-        const richMenuId = event.target.dataset.id;
-        if (!confirm(`リッチメニュー「${richMenuId}」を削除しますか？この操作は元に戻せません。`)) {
-            return;
-        }
-        showLoading();
-        try {
-            const deleteRichMenu = functions.httpsCallable('deleteRichMenu');
-            await deleteRichMenu({ richMenuId });
-            alert('リッチメニューを削除しました。');
-            await loadRichMenuList();
-        } catch (error) {
-            console.error('Error deleting rich menu:', error);
-            alert(`リッチメニューの削除中にエラーが発生しました: ${error.message}`);
-        } finally {
-            hideLoading();
-        }
     }
 }); 

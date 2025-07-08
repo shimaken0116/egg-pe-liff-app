@@ -16,6 +16,13 @@ class LINEClient {
             config.headers['Authorization'] = `Bearer ${accessToken}`;
             return config;
         });
+
+        // Centralized error handler
+        this.handleError = (error, context) => {
+            const errorMessage = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+            logger.error(`Error in ${context}:`, errorMessage);
+            throw new Error(`LINE API Error in ${context}: ${errorMessage}`);
+        };
     }
 
     async getAccessToken() {
@@ -30,8 +37,7 @@ class LINEClient {
             const response = await this.axios.get('/richmenu/list');
             return response.data.richmenus;
         } catch (error) {
-            logger.error('Error fetching rich menu list:', error.response?.data || error.message);
-            throw new Error('Failed to fetch rich menu list from LINE API.');
+            this.handleError(error, 'getRichMenuList');
         }
     }
 
@@ -40,8 +46,7 @@ class LINEClient {
             const response = await this.axios.post('/richmenu', richMenuObject);
             return response.data.richMenuId;
         } catch (error) {
-            logger.error('Error creating rich menu:', error.response?.data || error.message);
-            throw new Error('Failed to create rich menu with LINE API.');
+            this.handleError(error, 'createRichMenu');
         }
     }
     
@@ -51,21 +56,18 @@ class LINEClient {
                 headers: { 'Content-Type': contentType }
             });
         } catch (error) {
-            logger.error('Error uploading rich menu image:', error.response?.data || error.message);
-            throw new Error('Failed to upload rich menu image to LINE API.');
+            this.handleError(error, 'uploadRichMenuImage');
         }
     }
     
     async deleteRichMenu(richMenuId) {
         try {
             await this.axios.delete(`/richmenu/${richMenuId}`);
-        } catch (error)
-        {
-            logger.error(`Error deleting rich menu ${richMenuId}:`, error.response?.data || error.message);
-            // Don't throw an error if it's already deleted (404)
+        } catch (error) {
             if (error.response?.status !== 404) {
-                 throw new Error(`Failed to delete rich menu ${richMenuId} from LINE API.`);
+                 this.handleError(error, 'deleteRichMenu');
             }
+            logger.warn(`Attempted to delete non-existent rich menu ${richMenuId}. Ignoring.`);
         }
     }
 
@@ -73,8 +75,16 @@ class LINEClient {
         try {
             await this.axios.post(`/user/all/richmenu/${richMenuId}`);
         } catch (error) {
-            logger.error(`Error setting default rich menu to ${richMenuId}:`, error.response?.data || error.message);
-            throw new Error('Failed to set default rich menu via LINE API.');
+            this.handleError(error, 'setDefaultRichMenu');
+        }
+    }
+    
+    async getRichMenu(richMenuId) {
+        try {
+            const response = await this.axios.get(`/richmenu/${richMenuId}`);
+            return response.data;
+        } catch (error) {
+            this.handleError(error, 'getRichMenu');
         }
     }
     
@@ -82,8 +92,7 @@ class LINEClient {
         try {
             await this.axios.post(`/user/${userId}/richmenu/${richMenuId}`);
         } catch (error) {
-            logger.error(`Failed to link rich menu ${richMenuId} to user ${userId}`, error.response?.data || error.message);
-            throw new Error('Failed to link rich menu to user.');
+            this.handleError(error, 'linkRichMenuToUser');
         }
     }
     
@@ -91,8 +100,7 @@ class LINEClient {
         try {
             await this.axios.delete(`/user/${userId}/richmenu`);
         } catch (error) {
-             logger.error(`Failed to unlink rich menu from user ${userId}`, error.response?.data || error.message);
-             throw new Error('Failed to unlink rich menu from user.');
+             this.handleError(error, 'unlinkRichMenuFromUser');
         }
     }
 }

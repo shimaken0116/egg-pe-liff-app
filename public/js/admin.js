@@ -199,7 +199,133 @@ document.addEventListener('DOMContentLoaded', async (event) => {
 
         const initMessagingPage = () => { /* ... placeholder ... */ };
         
-        const initTagsPage = () => { /* ... placeholder ... */ };
+        const initTagsPage = () => {
+            const createTagButton = document.getElementById('createTagButton');
+            const newTagNameInput = document.getElementById('newTagName');
+            const newTagCategoryInput = document.getElementById('newTagCategory');
+            const createTagResult = document.getElementById('createTagResult');
+            const tagsListContainer = document.getElementById('tags-list-container');
+            const tagListResult = document.getElementById('tagListResult');
+            const reloadTagsButton = document.getElementById('reloadTagsButton');
+
+            // タグのレンダリング
+            const renderTags = (tags) => {
+                const header = tagsListContainer.querySelector('h3');
+                tagsListContainer.innerHTML = ''; // Clear previous content
+                if(header) tagsListContainer.appendChild(header);
+                
+                if (!tags || tags.length === 0) {
+                    tagsListContainer.insertAdjacentHTML('beforeend', '<p>タグはまだ作成されていません。</p>');
+                    return;
+                }
+                
+                const groupedTags = tags.reduce((acc, tag) => {
+                    const category = tag.category || '未分類';
+                    if (!acc[category]) acc[category] = [];
+                    acc[category].push(tag);
+                    return acc;
+                }, {});
+
+                for (const category in groupedTags) {
+                    const groupDiv = document.createElement('div');
+                    groupDiv.className = 'tag-group';
+                    let tagsHtml = `<h3>${category}</h3>`;
+                    groupedTags[category].forEach(tag => {
+                        tagsHtml += `
+                            <div class="tag-item" data-tag-id="${tag.id}">
+                                <span>${tag.name}</span>
+                                <div class="tag-actions">
+                                    <button class="btn btn-sm btn-info edit-tag-button">編集</button>
+                                    <button class="btn btn-sm btn-danger delete-tag-button">削除</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    groupDiv.innerHTML = tagsHtml;
+                    tagsListContainer.appendChild(groupDiv);
+                }
+            };
+
+            // タグの取得
+            const fetchTags = async () => {
+                tagListResult.textContent = 'タグを取得中...';
+                try {
+                    const getTags = functions.httpsCallable('getTags');
+                    const result = await getTags();
+                    renderTags(result.data.tags);
+                    tagListResult.textContent = 'タグの読み込みが完了しました。';
+                } catch (error) {
+                    console.error('Fetch tags error:', error);
+                    tagListResult.textContent = 'タグの取得に失敗しました: ' + error.message;
+                }
+            };
+
+            reloadTagsButton.addEventListener('click', fetchTags);
+
+            createTagButton.addEventListener('click', async () => {
+                const name = newTagNameInput.value.trim();
+                const category = newTagCategoryInput.value.trim();
+                if (!name || !category) {
+                    createTagResult.textContent = 'タグ名とカテゴリを入力してください。';
+                    return;
+                }
+                createTagResult.textContent = '作成中...';
+                try {
+                    const createTag = functions.httpsCallable('createTag');
+                    await createTag({ name, category });
+                    createTagResult.textContent = 'タグを作成しました。';
+                    newTagNameInput.value = '';
+                    newTagCategoryInput.value = '';
+                    fetchTags(); // Refresh list
+                } catch (error) {
+                    console.error('Create tag error:', error);
+                    createTagResult.textContent = '作成に失敗しました: ' + error.message;
+                }
+            });
+
+            // Event delegation for edit/delete buttons
+            tagsListContainer.addEventListener('click', async (e) => {
+                const target = e.target;
+                const tagItem = target.closest('.tag-item');
+                if (!tagItem) return;
+                
+                const tagId = tagItem.dataset.tagId;
+                const tagName = tagItem.querySelector('span').textContent;
+
+                if (target.classList.contains('edit-tag-button')) {
+                    const newName = prompt('新しいタグ名を入力してください:', tagName);
+                    if (!newName) return;
+                    
+                    const currentCategory = tagItem.closest('.tag-group').querySelector('h3').textContent;
+                    const newCategory = prompt('新しいカテゴリ名を入力してください:', currentCategory);
+                    if (!newCategory) return;
+                    
+                    try {
+                        const updateTag = functions.httpsCallable('updateTag');
+                        await updateTag({ id: tagId, name: newName, category: newCategory });
+                        fetchTags();
+                    } catch (error) {
+                         console.error('Update tag error:', error);
+                         alert('更新に失敗しました: ' + error.message);
+                    }
+                }
+
+                if (target.classList.contains('delete-tag-button')) {
+                    if (!confirm(`タグ「${tagName}」を本当に削除しますか？`)) return;
+                    try {
+                        const deleteTag = functions.httpsCallable('deleteTag');
+                        await deleteTag({ id: tagId });
+                        fetchTags();
+                    } catch (error) {
+                        console.error('Delete tag error:', error);
+                        alert('削除に失敗しました: ' + error.message);
+                    }
+                }
+            });
+            
+            // Initial fetch when the page loads
+            fetchTags();
+        };
 
         const initUserDetailPage = (params) => {
             const userId = params.userId;
@@ -209,6 +335,240 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                 return;
             }
             // Fetch and render user details...
+        };
+
+        const initRichMenuEditorPage = (params = {}) => {
+            const richMenuId = params.richMenuId;
+            const title = document.getElementById('rich-menu-editor-title');
+            
+            // --- State Management ---
+            let richMenuState = {
+                name: '',
+                chatBarText: '',
+                selected: true,
+                isDefault: false,
+                targetTags: [],
+                size: { width: 2500, height: 1686 }, // Default 'large'
+                areas: [],
+                imageBase64: null,
+            };
+
+            const actionModal = new bootstrap.Modal(document.getElementById('actionModal'));
+            
+            // --- DOM Elements ---
+            const richMenuNameInput = document.getElementById('richMenuName');
+            const chatBarTextInput = document.getElementById('chatBarText');
+            const isDefaultCheckbox = document.getElementById('isDefaultMenu');
+            const targetTagsSelect = document.getElementById('targetTags');
+            const preview = document.getElementById('rich-menu-preview');
+            const templateSelector = document.querySelector('.template-selector');
+            const imageUploadInput = document.getElementById('richMenuImageUpload');
+            const uploadImageButton = document.getElementById('uploadImageButton');
+            const saveButton = document.getElementById('saveRichMenuButton');
+
+            // --- Initial Load ---
+            if (richMenuId) {
+                title.textContent = 'リッチメニューの編集';
+                loadRichMenuDetails(richMenuId);
+            } else {
+                title.textContent = 'リッチメニューの新規作成';
+                initializeEditor();
+            }
+
+            function initializeEditor() {
+                // Setup based on default state
+                updateActionAreas('large_6'); 
+                loadTags();
+            }
+
+            async function loadRichMenuDetails(id) {
+                showLoading();
+                try {
+                    // First, try to get extended details from our Firestore DB
+                    const getDetails = functions.httpsCallable('getRichMenuDetails');
+                    const result = await getDetails({ richMenuId: id });
+                    richMenuState = result.data.menuData;
+                    
+                } catch (error) {
+                    console.warn(`Could not get menu details from Firestore (menu might be legacy): ${error.message}`);
+                    // If not in Firestore, fetch basic details from LINE API via a different function
+                    // For now, let's just initialize with the name and let user fill the rest
+                    // TODO: Create a function to get basic details from LINE API
+                    richMenuState.name = "読み込み失敗（要再設定）";
+                    richMenuState.chatBarText = "";
+                }
+
+                // Populate form with loaded data
+                richMenuNameInput.value = richMenuState.name;
+                chatBarTextInput.value = richMenuState.chatBarText;
+                isDefaultCheckbox.checked = richMenuState.isDefault || false;
+
+                // TODO: Load image preview from LINE
+                const template = (richMenuState.size && richMenuState.size.height === 843) ? 'compact_4' : 'large_6';
+                updateActionAreas(template);
+                
+                // Highlight the correct template button
+                templateSelector.querySelectorAll('button').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.template === template);
+                });
+
+                await loadTags(); // Wait for tags to load
+                
+                // Now set the selected tags
+                const tagValues = richMenuState.targetTags || [];
+                for (const option of targetTagsSelect.options) {
+                    if (tagValues.includes(option.value)) {
+                        option.selected = true;
+                    }
+                }
+                
+                hideLoading();
+            }
+
+
+            // --- Template and Action Area Logic ---
+            function updateActionAreas(template) {
+                const areaConfigs = {
+                    large_6: { count: 6, chars: ['A', 'B', 'C', 'D', 'E', 'F'] },
+                    compact_4: { count: 4, chars: ['A', 'B', 'C', 'D'] }
+                };
+
+                const config = areaConfigs[template];
+                preview.innerHTML = ''; // Clear previous areas
+                for (let i = 0; i < config.count; i++) {
+                    const areaDiv = document.createElement('div');
+                    areaDiv.className = 'action-area';
+                    areaDiv.dataset.area = config.chars[i];
+                    areaDiv.textContent = config.chars[i];
+                    preview.appendChild(areaDiv);
+                }
+            }
+
+            templateSelector.addEventListener('click', e => {
+                if (e.target.tagName !== 'BUTTON') return;
+                
+                templateSelector.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+                e.target.classList.add('active');
+                const template = e.target.dataset.template;
+                
+                preview.className = 'rich-menu-preview'; // Reset classes
+                preview.classList.add(`rich-menu-template-${template}`);
+
+                richMenuState.size = template === 'large_6' ? { width: 2500, height: 1686 } : { width: 2500, height: 843 };
+                updateActionAreas(template);
+                richMenuState.areas = []; // Reset areas when template changes
+            });
+
+
+            // --- Image Upload ---
+            uploadImageButton.addEventListener('click', () => imageUploadInput.click());
+            imageUploadInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const base64String = e.target.result.split(',')[1];
+                    richMenuState.imageBase64 = base64String;
+                    preview.style.backgroundImage = `url('${e.target.result}')`;
+                    preview.classList.add('has-image');
+                };
+                reader.readAsDataURL(file);
+            });
+
+            // --- Action Modal Logic ---
+            preview.addEventListener('click', e => {
+                if (!e.target.classList.contains('action-area')) return;
+                const areaId = e.target.dataset.area;
+                preview.querySelectorAll('.action-area').forEach(area => area.classList.remove('selected'));
+                e.target.classList.add('selected');
+                
+                const modalEl = document.getElementById('actionModal');
+                if (modalEl) {
+                    const actionModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    document.getElementById('modalAreaId').textContent = areaId;
+                    document.getElementById('current-editing-area').value = areaId;
+                    actionModal.show();
+                } else {
+                    console.error("Modal element #actionModal not found!");
+                }
+            });
+
+            // Moved event listener setup here to ensure it's only done once.
+            document.getElementById('saveActionButton').addEventListener('click', () => {
+                 const areaId = document.getElementById('current-editing-area').value;
+                 alert(`Action for Area ${areaId} saved (locally)!`);
+                 const modalEl = document.getElementById('actionModal');
+                 const actionModal = bootstrap.Modal.getInstance(modalEl);
+                 if (actionModal) {
+                    actionModal.hide();
+                 }
+            });
+
+
+            // --- Load Tags for Targeting ---
+            async function loadTags() {
+                tagsLoadingSpinner.style.display = 'block';
+                try {
+                    const getTags = functions.httpsCallable('getTags');
+                    const result = await getTags();
+                    const tags = result.data.tags;
+                    
+                    targetTagsSelect.innerHTML = '';
+                    if (tags && tags.length > 0) {
+                        tags.forEach(tag => {
+                            const option = new Option(`${tag.category} / ${tag.name}`, tag.name);
+                            targetTagsSelect.add(option);
+                        });
+                    } else {
+                        targetTagsSelect.innerHTML = '<option disabled>利用可能なタグがありません</option>';
+                    }
+
+                } catch (error) {
+                    console.error("Failed to load tags:", error);
+                    targetTagsSelect.innerHTML = '<option disabled>タグの読込に失敗</option>';
+                } finally {
+                    tagsLoadingSpinner.style.display = 'none';
+                }
+            }
+
+            // --- Save Logic ---
+            saveButton.addEventListener('click', async () => {
+                // 1. Collect data from form into state
+                richMenuState.name = richMenuNameInput.value;
+                richMenuState.chatBarText = chatBarTextInput.value;
+                richMenuState.isDefault = isDefaultCheckbox.checked;
+                richMenuState.targetTags = Array.from(targetTagsSelect.selectedOptions).map(opt => opt.value);
+                // richMenuState.areas is updated via modal (TODO)
+
+                // 2. Validate data
+                if (!richMenuState.name || !richMenuState.chatBarText) {
+                    alert('タイトルとメニューバーのテキストは必須です。');
+                    return;
+                }
+
+                // 3. Call Cloud Function
+                showLoading();
+                try {
+                    const saveMenu = functions.httpsCallable('saveRichMenu');
+                    const result = await saveMenu({ 
+                        richMenuId: richMenuId, // Pass existing ID if in edit mode
+                        menuData: richMenuState,
+                        imageBase64: richMenuState.imageBase64 // Pass the new image
+                    });
+
+                    if (result.data.success) {
+                        alert('リッチメニューを保存しました！');
+                        loadPage('rich-menu-list');
+                    } else {
+                         throw new Error(result.data.message || '不明なエラーが発生しました。');
+                    }
+                } catch (error) {
+                    console.error("Failed to save rich menu:", error);
+                    alert(`保存に失敗しました: ${error.message}`);
+                } finally {
+                    hideLoading();
+                }
+            });
         };
 
         const pageInitializers = {
@@ -227,7 +587,7 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                     hideLoading();
                 }
             },
-            'rich-menu-editor': () => {}
+            'rich-menu-editor': initRichMenuEditorPage,
         };
         window.pageInitializers = pageInitializers;
 

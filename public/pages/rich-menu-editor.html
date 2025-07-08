@@ -1,69 +1,93 @@
 <!-- Rich Menu Editor/Builder Page -->
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
-        <h1 class="h2" id="rich-menu-editor-title">リッチメニューの新規作成</h1>
+        <h1 class="h2" id="rich-menu-editor-title">リッチメニュー作成</h1>
         <div class="btn-toolbar mb-2 mb-md-0">
-            <button type="button" class="btn btn-secondary" id="backToRichMenuListButton">
-                一覧に戻る
-            </button>
+             <button type="button" class="btn btn-primary" id="saveRichMenuButton">保存</button>
+             <button type="button" class="btn btn-secondary ms-2" id="backToRichMenuListButton">一覧に戻る</button>
         </div>
     </div>
 
-    <!-- Loading Spinner -->
-    <div id="editor-loading-spinner" class="text-center my-5" style="display: none;">
-        <div class="spinner-border" role="status">
-            <span class="visually-hidden">Loading...</span>
+    <div class="row">
+        <!-- Left Column: Settings -->
+        <div class="col-md-4">
+            <h5>設定</h5>
+            <div class="mb-3">
+                <label for="richMenuName" class="form-label">タイトル</label>
+                <input type="text" class="form-control" id="richMenuName" placeholder="管理用のメニュー名" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">表示期間</label>
+                <div class="input-group">
+                    <input type="datetime-local" class="form-control" id="displayStartDate">
+                    <span class="input-group-text">〜</span>
+                    <input type="datetime-local" class="form-control" id="displayEndDate">
+                </div>
+            </div>
+             <div class="mb-3">
+                <label for="chatBarText" class="form-label">メニューバーのテキスト</label>
+                <input type="text" class="form-control" id="chatBarText" placeholder="例: メニューはこちら" required>
+            </div>
+             <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="isDefaultMenu">
+                <label class="form-check-label" for="isDefaultMenu">デフォルトのリッチメニューに設定</label>
+            </div>
+
+            <hr class="my-4">
+
+            <h5>ターゲット設定</h5>
+            <div class="mb-3">
+                 <label for="targetTags" class="form-label">このメニューを表示するユーザー</label>
+                 <div class="form-text mb-2">指定したタグを持つユーザーにこのメニューが表示されます。未選択の場合は、デフォルトメニューとして扱われます。</div>
+                 <select id="targetTags" class="form-control" multiple>
+                     <!-- Tags will be loaded here dynamically -->
+                 </select>
+                 <div id="tags-loading-spinner" class="mt-2" style="display: none;">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <span>タグを読み込み中...</span>
+                 </div>
+            </div>
         </div>
-        <p class="mt-2">リッチメニューの情報を読み込んでいます...</p>
+
+        <!-- Right Column: Content -->
+        <div class="col-md-8">
+            <h5>コンテンツ設定</h5>
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">テンプレートを選択</h6>
+                    <div class="d-flex justify-content-around template-selector">
+                        <!-- Add template options here -->
+                        <button class="btn btn-outline-secondary active" data-template="large_6">大 (6)</button>
+                        <button class="btn btn-outline-secondary" data-template="compact_4">小 (4)</button>
+                    </div>
+                    <hr>
+                    <h6 class="card-title">背景画像を設定</h6>
+                    <div class="rich-menu-preview-container">
+                        <div id="rich-menu-preview" class="rich-menu-preview rich-menu-template-large_6">
+                            <!-- Action areas will be injected here -->
+                            <div class="action-area" data-area="A">A</div>
+                            <div class="action-area" data-area="B">B</div>
+                            <div class="action-area" data-area="C">C</div>
+                            <div class="action-area" data-area="D">D</div>
+                            <div class="action-area" data-area="E">E</div>
+                            <div class="action-area" data-area="F">F</div>
+                        </div>
+                        <input type="file" id="richMenuImageUpload" class="d-none" accept="image/jpeg, image/png">
+                        <button id="uploadImageButton" class="btn btn-secondary mt-2">画像をアップロード</button>
+                    </div>
+
+                </div>
+            </div>
+            
+             <div class="card mt-3">
+                <div class="card-body">
+                    <h6 class="card-title">アクションを設定</h6>
+                    <div id="action-settings">
+                        <!-- Action settings form for the selected area -->
+                        <div class="text-muted">プレビュー上のエリア(A, B, C...)を選択してアクションを設定してください。</div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-
-    <!-- Main Form -->
-    <form id="richMenuForm" style="display: none;">
-        <!-- Rich Menu Name -->
-        <div class="mb-3">
-            <label for="richMenuName" class="form-label">リッチメニュー名</label>
-            <input type="text" class="form-control" id="richMenuName" placeholder="例: 通常メニュー" required>
-            <div class="form-text">管理画面上でのみ表示される名前です。</div>
-        </div>
-
-        <!-- Rich Menu Chat Bar Text -->
-        <div class="mb-3">
-            <label for="chatBarText" class="form-label">チャットバーテキスト</label>
-            <input type="text" class="form-control" id="chatBarText" placeholder="例: メニュー" required>
-            <div class="form-text">LINEのトーク画面下部に表示されるテキストです。</div>
-        </div>
-
-        <!-- Rich Menu JSON Definition -->
-        <div class="mb-3">
-            <label for="richMenuJson" class="form-label">リッチメニュー定義 (JSON)</label>
-            <p class="form-text">
-                LINEの<a href="https://developers.line.biz/ja/reference/messaging-api/#rich-menu-object" target="_blank">リッチメニューオブジェクト</a>の仕様に従ってJSONを編集してください。<br>
-                名前とチャットバーテキストは上のフォームで設定されるため、このJSONからは除外されます。主に `areas` を編集します。
-            </p>
-            <textarea class="form-control" id="richMenuJson" rows="18" required></textarea>
-        </div>
-
-        <!-- Rich Menu Image -->
-        <div class="mb-3">
-            <label for="richMenuImage" class="form-label">背景画像</label>
-            <p class="form-text">対応形式: JPEGまたはPNG。サイズ: 2500x1686または2500x843。最大ファイルサイズ: 1MB。</p>
-            <input class="form-control" type="file" id="richMenuImage" accept="image/jpeg, image/png">
-            <div class="mt-2">
-                <p>現在の画像:</p>
-                <img id="currentRichMenuImage" src="" alt="現在の背景画像" class="img-fluid" style="max-width: 300px; display: none;">
-                <p id="noRichMenuImage" class="text-muted" style="display: none;">画像が設定されていません。</p>
-            </div>
-        </div>
-        
-        <hr class="my-4">
-
-        <!-- Action Buttons -->
-        <div class="d-flex justify-content-between">
-            <div>
-                <button type="submit" class="btn btn-primary" id="saveRichMenuButton">保存</button>
-                <span id="save-result" class="ms-3"></span>
-            </div>
-            <button type="button" class="btn btn-danger" id="deleteRichMenuButton" style="display: none;">このリッチメニューを削除</button>
-        </div>
-    </form>
 </div> 

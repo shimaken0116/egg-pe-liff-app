@@ -168,4 +168,78 @@ body, html {
     to {
         transform: rotate(360deg);
     }
+}
+
+.tag-checkbox-item {
+    margin-right: 15px;
+}
+
+/* =================================================================
+Rich Menu Editor Styles
+================================================================= */
+.template-selector .btn {
+    border: 1px solid #dee2e6;
+    padding: 1rem;
+}
+
+.rich-menu-preview-container {
+    position: relative;
+    width: 100%;
+    max-width: 600px; /* Example max-width */
+    margin: 0 auto;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+}
+
+.rich-menu-preview {
+    display: grid;
+    width: 100%;
+    aspect-ratio: 2500 / 1686; /* or 2500 / 843 for compact */
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-color: #ccc;
+}
+
+.rich-menu-template-large_6 {
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+}
+.rich-menu-template-compact_4 {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    aspect-ratio: 2500 / 843;
+}
+
+
+.action-area {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px dashed #aaa;
+    font-size: 1.5rem;
+    color: #666;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.action-area:hover, .action-area.selected {
+    background-color: rgba(0, 123, 255, 0.2);
+}
+
+#uploadImageButton {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.rich-menu-preview.has-image #uploadImageButton {
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+.rich-menu-preview.has-image:hover #uploadImageButton {
+    opacity: 1;
+    background-color: rgba(0,0,0,0.5);
+    color: white;
 } 

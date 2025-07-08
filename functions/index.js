@@ -569,15 +569,21 @@ exports.deleteRichMenu = onCall(FUNCTION_CONFIG, async (request) => {
         throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'richMenuId'.");
     }
     try {
-        const client = new line.Client({
-            channelAccessToken: process.env.LINE_ACCESS_TOKEN,
-            channelSecret: process.env.LINE_CHANNEL_SECRET,
-        });
-        await client.deleteRichMenu(richMenuId);
+        // 1. Delete from LINE server
+        await lineClient.deleteRichMenu(richMenuId);
+        logger.info(`Successfully deleted rich menu from LINE: ${richMenuId}`);
+        
+        // 2. Delete from Firestore
+        const docRef = db.collection("richMenus").doc(richMenuId);
+        if ((await docRef.get()).exists) {
+            await docRef.delete();
+            logger.info(`Successfully deleted rich menu document from Firestore: ${richMenuId}`);
+        }
+
         return { success: true };
     } catch (error) {
         logger.error(`Failed to delete rich menu ${richMenuId}`, error);
-        throw new functions.https.HttpsError("internal", "Failed to delete rich menu.", error.originalError?.response?.data || error);
+        throw new functions.https.HttpsError("internal", "Failed to delete rich menu.", error.message);
     }
 });
 
@@ -799,6 +805,36 @@ exports.saveRichMenu = onCall(FUNCTION_CONFIG, async (request) => {
         };
         await db.collection("richMenus").doc(newRichMenuId).set(newMenuDoc);
         logger.info(`Successfully saved rich menu to Firestore. ID: ${newRichMenuId}`);
+
+        // 6. Link this menu to all users who have the target tags.
+        const targetTags = menuData.tags || [];
+        if (targetTags.length > 0) {
+            logger.info(`Linking new menu ${newRichMenuId} to users with tags: ${targetTags.join(", ")}`);
+            const usersRef = db.collection('users');
+            
+            // Note: Firestore does not support array-contains-all queries.
+            // We fetch users who have the first tag, then filter in the function.
+            const snapshot = await usersRef.where('tags', 'array-contains', targetTags[0]).get();
+
+            if (!snapshot.empty) {
+                const updatePromises = [];
+                snapshot.forEach(doc => {
+                    const user = doc.data();
+                    const userTags = new Set(user.tags || []);
+                    const hasAllRequiredTags = targetTags.every(tag => userTags.has(tag));
+
+                    if (hasAllRequiredTags) {
+                        logger.debug(`User ${doc.id} has all required tags. Linking rich menu.`);
+                        updatePromises.push(lineClient.linkRichMenuToUser(doc.id, newRichMenuId));
+                    }
+                });
+                
+                if (updatePromises.length > 0) {
+                    await Promise.all(updatePromises);
+                    logger.info(`Finished linking menu to ${updatePromises.length} users.`);
+                }
+            }
+        }
 
         return { success: true, richMenuId: newRichMenuId };
     } catch (error) {

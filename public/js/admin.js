@@ -822,6 +822,27 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                 loadPage('rich-menu-editor');
             } else if (target.classList.contains('btn-edit-rich-menu')) {
                 loadPage('rich-menu-editor', { richMenuId: target.dataset.id });
+            } else if (target.classList.contains('btn-delete-rich-menu')) {
+                const richMenuId = target.dataset.id;
+                const row = target.closest('tr');
+                const menuName = row ? row.cells[1].textContent : '不明なメニュー';
+
+                if (confirm(`リッチメニュー「${menuName}」を本当に削除しますか？\nこの操作は取り消せません。`)) {
+                    showLoading();
+                    const deleteRichMenu = functions.httpsCallable('deleteRichMenu');
+                    deleteRichMenu({ richMenuId })
+                        .then(() => {
+                            alert('リッチメニューを削除しました。');
+                            loadPage('rich-menu-list');
+                        })
+                        .catch((error) => {
+                            console.error('Failed to delete rich menu:', error);
+                            alert(`削除に失敗しました: ${error.message}`);
+                        })
+                        .finally(() => {
+                            hideLoading();
+                        });
+                }
             }
         });
 

@@ -249,11 +249,15 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                     const pushMessage = functions.httpsCallable('pushMessage');
                     const response = await pushMessage({ 
                         tag: tag,
-                        message: message
+                        messageText: message
                     });
 
                     if (response.data.success) {
-                        result.textContent = `メッセージを送信しました。対象ユーザー数: ${response.data.targetUserCount || '不明'}人`;
+                        // Extract user count from the message (format: "Message sent to X users.")
+                        const userCountMatch = response.data.message.match(/(\d+)/);
+                        const userCount = userCountMatch ? userCountMatch[1] : '不明';
+                        
+                        result.textContent = `メッセージを送信しました。対象ユーザー数: ${userCount}人`;
                         result.className = 'text-success';
                         // Clear inputs on success
                         tagInput.value = '';

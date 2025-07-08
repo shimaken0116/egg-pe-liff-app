@@ -719,7 +719,36 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                 saveActionButton: document.getElementById('saveActionButton'),
             };
 
-            // プレビューエリアクリック → モーダル表示
+            // =======================================
+            // Step 2: 状態管理とプレビューフィードバック
+            // =======================================
+            
+            // UI用の簡易状態管理（エリア文字 → アクション）
+            const areaActions = new Map(); // 'A' -> {type: 'uri', value: 'https://...'}
+
+            // プレビューエリアの視覚的状態を更新
+            const updateAreaVisualState = (areaId, hasAction) => {
+                const areaEl = elements.preview.querySelector(`.action-area[data-area="${areaId}"]`);
+                if (areaEl) {
+                    if (hasAction) {
+                        areaEl.classList.add('configured');
+                        areaEl.title = `アクション設定済み: ${areaId}`;
+                    } else {
+                        areaEl.classList.remove('configured');
+                        areaEl.title = `未設定: ${areaId}`;
+                    }
+                }
+            };
+
+            // 既存設定の読み込み（編集モード用）
+            const loadExistingActions = (areas) => {
+                areaActions.clear();
+                // 今回は簡易実装のため、areasがあっても一旦スキップ
+                // TODO: Step 3でLINE API形式からの変換を実装
+                console.log('Existing areas loaded (placeholder):', areas);
+            };
+
+            // プレビューエリアクリック → モーダル表示（既存設定読み込み付き）
             elements.preview.addEventListener('click', (e) => {
                 const target = e.target;
                 if (!target.classList.contains('action-area')) return;
@@ -731,13 +760,63 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                 if (modalElements.areaLabel) modalElements.areaLabel.textContent = areaId;
                 if (modalElements.currentAreaInput) modalElements.currentAreaInput.value = areaId;
 
-                // 初期値設定（今回は常に未設定から）
-                if (modalElements.actionTypeSelect) modalElements.actionTypeSelect.value = 'none';
-                if (modalElements.actionValueContainer) modalElements.actionValueContainer.innerHTML = '<div class="text-muted">未設定</div>';
+                // 既存設定があれば読み込み
+                const existingAction = areaActions.get(areaId);
+                if (existingAction) {
+                    if (modalElements.actionTypeSelect) modalElements.actionTypeSelect.value = existingAction.type;
+                    // タイプに応じてフィールド生成
+                    const type = existingAction.type;
+                    let html = '';
+                    if (type === 'uri') {
+                        html = `<input type="text" class="form-control" id="actionValue" placeholder="https://example.com" value="${existingAction.value}">`;
+                    } else if (type === 'message') {
+                        html = `<textarea class="form-control" id="actionValue" rows="3" placeholder="送信するメッセージ">${existingAction.value}</textarea>`;
+                    } else if (type === 'postback') {
+                        html = `<input type="text" class="form-control" id="actionValue" placeholder="postbackデータ" value="${existingAction.value}">`;
+                    }
+                    if (modalElements.actionValueContainer) modalElements.actionValueContainer.innerHTML = html;
+                } else {
+                    // 新規設定
+                    if (modalElements.actionTypeSelect) modalElements.actionTypeSelect.value = 'none';
+                    if (modalElements.actionValueContainer) modalElements.actionValueContainer.innerHTML = '<div class="text-muted">未設定</div>';
+                }
 
                 // モーダル表示
                 actionModal.show();
             });
+
+            // モーダル「設定」ボタン - 状態保存とプレビュー更新
+            if (modalElements.saveActionButton) {
+                modalElements.saveActionButton.addEventListener('click', () => {
+                    const areaId = modalElements.currentAreaInput?.value;
+                    const actionType = modalElements.actionTypeSelect?.value;
+                    const actionValueEl = document.getElementById('actionValue');
+                    const actionValue = actionValueEl ? actionValueEl.value.trim() : '';
+
+                    if (!areaId) {
+                        console.warn('No area ID found');
+                        return;
+                    }
+
+                    if (actionType === 'none') {
+                        // アクション削除
+                        areaActions.delete(areaId);
+                        updateAreaVisualState(areaId, false);
+                        console.log(`Action removed for area ${areaId}`);
+                    } else {
+                        // アクション保存
+                        if (!actionValue) {
+                            alert('アクションの値を入力してください');
+                            return;
+                        }
+                        areaActions.set(areaId, { type: actionType, value: actionValue });
+                        updateAreaVisualState(areaId, true);
+                        console.log(`Action saved for area ${areaId}:`, { type: actionType, value: actionValue });
+                    }
+
+                    actionModal.hide();
+                });
+            }
 
             // アクションタイプ変更時の入力フィールド切り替え
             if (modalElements.actionTypeSelect) {
@@ -758,14 +837,6 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                     if (modalElements.actionValueContainer) {
                         modalElements.actionValueContainer.innerHTML = html;
                     }
-                });
-            }
-
-            // モーダル「設定」ボタン（Step 2で状態管理を実装予定）
-            if (modalElements.saveActionButton) {
-                modalElements.saveActionButton.addEventListener('click', () => {
-                    console.log('Action saved (placeholder)');
-                    actionModal.hide();
                 });
             }
         };

@@ -227,6 +227,18 @@ Rich Menu Editor Styles
     background-color: rgba(0, 123, 255, 0.2);
 }
 
+/* アクション設定済みエリアのスタイル */
+.action-area.configured {
+    background-color: rgba(40, 167, 69, 0.3);
+    border-color: #28a745;
+    color: #155724;
+    font-weight: bold;
+}
+
+.action-area.configured:hover {
+    background-color: rgba(40, 167, 69, 0.5);
+}
+
 #uploadImageButton {
     position: absolute;
     top: 50%;

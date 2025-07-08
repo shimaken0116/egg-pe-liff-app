@@ -535,12 +535,15 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                  
                  // Render saved actions
                  state.richMenu.areas = menuData.areas || [];
+                 // TODO: Step 2 で状態管理実装時に復活
+                 /*
                  elements.preview.querySelectorAll('.action-area').forEach(areaEl => {
                     const areaId = areaEl.dataset.area;
                     if (state.richMenu.areas.find(a => getAreaId(a) === areaId)) {
                         areaEl.classList.add('configured');
                     }
                  });
+                 */
 
             };
 
@@ -582,6 +585,8 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                         option.selected = (state.targetTags || []).includes(option.value);
                     });
                      
+                    // TODO: Step 2 で状態管理実装時に復活
+                    /*
                     elements.preview.querySelectorAll('.action-area').forEach(areaEl => {
                         const areaId = areaEl.dataset.area;
                         // A simple check to see if an action is defined for this area.
@@ -591,6 +596,7 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                              areaEl.classList.add('configured');
                         }
                     });
+                    */
 
                     // If the menu has an image, try to load it
                     if (menuData.lineRichMenuId) {
@@ -701,6 +707,67 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                     hideLoading();
                 }
             });
+
+            // =======================================
+            // Step 1: アクションモーダル基本UI
+            // =======================================
+            const modalElements = {
+                areaLabel: document.getElementById('modalAreaId'),
+                currentAreaInput: document.getElementById('current-editing-area'),
+                actionTypeSelect: document.getElementById('actionType'),
+                actionValueContainer: document.getElementById('action-value-container'),
+                saveActionButton: document.getElementById('saveActionButton'),
+            };
+
+            // プレビューエリアクリック → モーダル表示
+            elements.preview.addEventListener('click', (e) => {
+                const target = e.target;
+                if (!target.classList.contains('action-area')) return;
+
+                const areaId = target.dataset.area;
+                console.log(`Action area ${areaId} clicked`);
+
+                // モーダルにエリア情報設定
+                if (modalElements.areaLabel) modalElements.areaLabel.textContent = areaId;
+                if (modalElements.currentAreaInput) modalElements.currentAreaInput.value = areaId;
+
+                // 初期値設定（今回は常に未設定から）
+                if (modalElements.actionTypeSelect) modalElements.actionTypeSelect.value = 'none';
+                if (modalElements.actionValueContainer) modalElements.actionValueContainer.innerHTML = '<div class="text-muted">未設定</div>';
+
+                // モーダル表示
+                actionModal.show();
+            });
+
+            // アクションタイプ変更時の入力フィールド切り替え
+            if (modalElements.actionTypeSelect) {
+                modalElements.actionTypeSelect.addEventListener('change', (e) => {
+                    const type = e.target.value;
+                    let html = '';
+                    
+                    if (type === 'uri') {
+                        html = '<input type="text" class="form-control" id="actionValue" placeholder="https://example.com">';
+                    } else if (type === 'message') {
+                        html = '<textarea class="form-control" id="actionValue" rows="3" placeholder="送信するメッセージ"></textarea>';
+                    } else if (type === 'postback') {
+                        html = '<input type="text" class="form-control" id="actionValue" placeholder="postbackデータ">';
+                    } else {
+                        html = '<div class="text-muted">このエリアにはアクションが設定されません。</div>';
+                    }
+                    
+                    if (modalElements.actionValueContainer) {
+                        modalElements.actionValueContainer.innerHTML = html;
+                    }
+                });
+            }
+
+            // モーダル「設定」ボタン（Step 2で状態管理を実装予定）
+            if (modalElements.saveActionButton) {
+                modalElements.saveActionButton.addEventListener('click', () => {
+                    console.log('Action saved (placeholder)');
+                    actionModal.hide();
+                });
+            }
         };
 
         const initRichMenuListPage = () => {

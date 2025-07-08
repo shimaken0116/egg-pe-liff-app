@@ -329,12 +329,89 @@ document.addEventListener('DOMContentLoaded', async (event) => {
 
         const initUserDetailPage = (params) => {
             const userId = params.userId;
-            const userDetailContainer = document.getElementById('userDetailContainer');
+            const container = document.getElementById('user-detail-container');
             if (!userId) {
-                userDetailContainer.innerHTML = '<p class="text-danger">ユーザーIDが指定されていません。</p>';
+                container.innerHTML = '<p class="text-danger">ユーザーIDが指定されていません。</p>';
                 return;
             }
-            // Fetch and render user details...
+            
+            const userDisplayName = document.getElementById('userDisplayName');
+            const tagsCheckboxContainer = document.getElementById('tags-checkbox-container');
+            const saveButton = document.getElementById('saveUserTagsButton');
+            const saveResult = document.getElementById('saveResult');
+
+            const loadDetails = async () => {
+                tagsCheckboxContainer.innerHTML = '読み込み中...';
+                try {
+                    // 並列でユーザー情報と全タグリストを取得
+                    const getUserDetails = functions.httpsCallable('getUserDetails');
+                    const getTags = functions.httpsCallable('getTags');
+                    
+                    const [userDetailsRes, allTagsRes] = await Promise.all([
+                        getUserDetails({ userId }),
+                        getTags()
+                    ]);
+
+                    const user = userDetailsRes.data.user;
+                    const allTags = allTagsRes.data.tags;
+
+                    userDisplayName.textContent = user.displayName;
+                    
+                    // タグをカテゴリ別にグループ化
+                    const groupedTags = allTags.reduce((acc, tag) => {
+                        const category = tag.category || '未分類';
+                        if (!acc[category]) acc[category] = [];
+                        acc[category].push(tag);
+                        return acc;
+                    }, {});
+
+                    // HTMLを生成
+                    tagsCheckboxContainer.innerHTML = '';
+                    for (const category in groupedTags) {
+                        const groupDiv = document.createElement('div');
+                        groupDiv.className = 'tag-category-group';
+                        
+                        let tagsHtml = `<h3>${category}</h3><div class="tag-checkbox-list">`;
+                        groupedTags[category].forEach(tag => {
+                            const isChecked = user.tags && user.tags.includes(tag.name);
+                            tagsHtml += `
+                                <div class="tag-checkbox-item">
+                                    <input type="checkbox" id="tag-${tag.id}" value="${tag.name}" ${isChecked ? 'checked' : ''}>
+                                    <label for="tag-${tag.id}">${tag.name}</label>
+                                </div>
+                            `;
+                        });
+                        tagsHtml += `</div>`;
+                        groupDiv.innerHTML = tagsHtml;
+                        tagsCheckboxContainer.appendChild(groupDiv);
+                    }
+
+                } catch (error) {
+                    console.error('Failed to load user details:', error);
+                    tagsCheckboxContainer.innerHTML = `<p class="text-danger">情報の読み込みに失敗しました: ${error.message}</p>`;
+                }
+            };
+            
+            saveButton.addEventListener('click', async () => {
+                const selectedTags = [];
+                tagsCheckboxContainer.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
+                    selectedTags.push(checkbox.value);
+                });
+
+                saveResult.textContent = '保存中...';
+                try {
+                    const updateUserTags = functions.httpsCallable('updateUserTags');
+                    await updateUserTags({ userId, tags: selectedTags });
+                    saveResult.textContent = '保存しました！';
+                    saveResult.className = 'text-success';
+                } catch (error) {
+                    console.error('Failed to save user tags:', error);
+                    saveResult.textContent = `保存に失敗しました: ${error.message}`;
+                    saveResult.className = 'text-danger';
+                }
+            });
+
+            loadDetails();
         };
 
         const initRichMenuEditorPage = (params = {}) => {

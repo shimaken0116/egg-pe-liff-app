@@ -665,13 +665,16 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                 state.isDefault = elements.isDefaultCheckbox.checked;
                 state.targetTags = Array.from(elements.tagsSelect.selectedOptions).map(o => o.value);
                 
+                // areaActionsをLINE API形式に変換
+                const convertedAreas = convertAreaActionsToLineFormat();
+                
                 // Construct the menu data for the backend in the expected format
                 const backendMenuData = {
                     name: state.richMenu.name,
                     chatBarText: state.richMenu.chatBarText,
                     size: state.richMenu.size,
                     selected: state.richMenu.selected,
-                    areas: state.richMenu.areas,
+                    areas: convertedAreas.length > 0 ? convertedAreas : (state.richMenu.areas || []),
                     tags: state.targetTags,
                     isDefault: state.isDefault,
                 };
@@ -732,6 +735,84 @@ document.addEventListener('DOMContentLoaded', async (event) => {
             // UI用の簡易状態管理（エリア文字 → アクション）
             const areaActions = new Map(); // 'A' -> {type: 'uri', value: 'https://...'}
 
+            // =======================================
+            // Step 3: 座標計算とバックエンド連携
+            // =======================================
+            
+            // テンプレート定義と座標計算
+            const TEMPLATE_DEFS = {
+                large_6: {
+                    cols: 3, rows: 2,
+                    size: { width: 2500, height: 1686 },
+                    letters: ['A','B','C','D','E','F']
+                },
+                compact_4: {
+                    cols: 2, rows: 2,
+                    size: { width: 2500, height: 843 },
+                    letters: ['A','B','C','D']
+                }
+            };
+
+            const getTemplateKey = () => {
+                return state.richMenu.size.height === 843 ? 'compact_4' : 'large_6';
+            };
+
+            // エリア文字から座標を計算
+            const calculateBounds = (areaLetter) => {
+                const templateKey = getTemplateKey();
+                const template = TEMPLATE_DEFS[templateKey];
+                const index = template.letters.indexOf(areaLetter);
+                if (index === -1) return null;
+
+                const col = index % template.cols;
+                const row = Math.floor(index / template.cols);
+                const cellWidth = template.size.width / template.cols;
+                const cellHeight = template.size.height / template.rows;
+
+                return {
+                    x: Math.round(col * cellWidth),
+                    y: Math.round(row * cellHeight),
+                    width: Math.round(cellWidth),
+                    height: Math.round(cellHeight)
+                };
+            };
+
+            // 座標からエリア文字を逆算
+            const getAreaIdFromBounds = (bounds) => {
+                const templateKey = getTemplateKey();
+                const template = TEMPLATE_DEFS[templateKey];
+                const cellWidth = template.size.width / template.cols;
+                const cellHeight = template.size.height / template.rows;
+                
+                const col = Math.round(bounds.x / cellWidth);
+                const row = Math.round(bounds.y / cellHeight);
+                const index = row * template.cols + col;
+                
+                return template.letters[index] || null;
+            };
+
+            // 既存LINE形式データからareaActionsへ変換
+            const loadExistingActionsFromBounds = (areas) => {
+                areaActions.clear();
+                if (!areas || !Array.isArray(areas)) return;
+
+                areas.forEach(area => {
+                    if (area.bounds && area.action) {
+                        const areaId = getAreaIdFromBounds(area.bounds);
+                        if (areaId && area.action.type !== 'none') {
+                            const actionData = { type: area.action.type };
+                            if (area.action.uri) actionData.value = area.action.uri;
+                            else if (area.action.text) actionData.value = area.action.text;
+                            else if (area.action.data) actionData.value = area.action.data;
+                            
+                            areaActions.set(areaId, actionData);
+                            updateAreaVisualState(areaId, true);
+                        }
+                    }
+                });
+                console.log('Loaded existing actions:', Object.fromEntries(areaActions));
+            };
+
             // プレビューエリアの視覚的状態を更新
             const updateAreaVisualState = (areaId, hasAction) => {
                 const areaEl = elements.preview.querySelector(`.action-area[data-area="${areaId}"]`);
@@ -746,13 +827,55 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                 }
             };
 
-            // 既存設定の読み込み（編集モード用）
-            const loadExistingActions = (areas) => {
-                areaActions.clear();
-                // 今回は簡易実装のため、areasがあっても一旦スキップ
-                // TODO: Step 3でLINE API形式からの変換を実装
-                console.log('Existing areas loaded (placeholder):', areas);
+            // リッチメニューエリアの初期化と設定
+            const initializeAreas = () => {
+                // プレビューエリアとアクションエリアのマッピング
+                const areasData = state.richMenu.areas || [];
+                console.log('Loading areas from state:', areasData);
+                
+                // 既存設定をareaActionsに読み込み
+                loadExistingActionsFromBounds(areasData);
+                
+                // テンプレートに基づいてアクションエリアを生成
+                const templateKey = getTemplateKey();
+                const template = TEMPLATE_DEFS[templateKey];
+                
+                template.letters.forEach(letter => {
+                    const element = document.getElementById(`area${letter}`);
+                    if (element) {
+                        // 既存設定があるかチェック
+                        const hasAction = areaActions.has(letter);
+                        updateAreaVisualState(letter, hasAction);
+                    }
+                });
             };
+
+            // areaActionsからLINE API形式areasに変換
+            const convertAreaActionsToLineFormat = () => {
+                const areas = [];
+                
+                areaActions.forEach((actionData, areaId) => {
+                    const bounds = calculateBounds(areaId);
+                    if (!bounds) return;
+
+                    const action = { type: actionData.type };
+                    if (actionData.type === 'uri') {
+                        action.uri = actionData.value;
+                    } else if (actionData.type === 'message') {
+                        action.text = actionData.value;
+                    } else if (actionData.type === 'postback') {
+                        action.data = actionData.value;
+                    }
+
+                    areas.push({ bounds, action });
+                });
+
+                console.log('Converted to LINE format:', areas);
+                return areas;
+            };
+
+            // 初期化実行
+            initializeAreas();
 
             // プレビューエリアクリック → モーダル表示（既存設定読み込み付き）
             elements.preview.addEventListener('click', (e) => {

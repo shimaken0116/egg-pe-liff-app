@@ -702,7 +702,13 @@ exports.getRichMenuDetails = onCall(FUNCTION_CONFIG, async (request) => {
     try {
         const doc = await db.collection("richMenus").doc(menuId).get();
         if (doc.exists) {
-            return { id: doc.id, ...doc.data() };
+            const data = doc.data();
+            // Firestoreのデータに何らかの理由でsizeがない場合のフォールバック
+            if (!data.size) {
+                data.size = { width: 2500, height: 1686 }; // デフォルトは 'large_6'
+                logger.warn(`Rich menu ${menuId} from Firestore was missing size. Defaulted to large.`);
+            }
+            return { id: doc.id, ...data };
         }
 
         // Firestoreにない場合、LINE APIに問い合わせる
@@ -712,11 +718,13 @@ exports.getRichMenuDetails = onCall(FUNCTION_CONFIG, async (request) => {
             // LINEに存在した場合、基本的な情報を返す
             return {
                 id: menuId,
-                name: "（名称未設定）",
-                chatBarText: "（タップして開く）",
-                areas: [],
+                name: menuFromLine.name || "（名称未設定）",
+                chatBarText: menuFromLine.chatBarText || "（タップして開く）",
+                size: menuFromLine.size, // ★★★ 修正点: LINE APIから取得したsizeを返す
+                areas: menuFromLine.areas || [],
                 tags: [],
                 lineRichMenuId: menuId,
+                selected: menuFromLine.selected, // selectedプロパティも追加
                 warning: "このリッチメニューはLINEには存在しますが、データベースに詳細がありません。設定を保存し直してください。",
             };
         } catch (lineError) {

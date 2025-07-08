@@ -1,7 +1,7 @@
 // Import compat libraries to create the global `firebase` object
-import 'https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js';
-import 'https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js';
-import 'https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js';
+import 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js';
+import 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js';
+import 'https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js';
 
 let auth;
 let functions;

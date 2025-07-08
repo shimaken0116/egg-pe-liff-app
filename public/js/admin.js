@@ -33,6 +33,12 @@ document.addEventListener('DOMContentLoaded', async (event) => {
         auth = firebase.auth();
         functions = app.functions('asia-northeast1');
 
+        // Emulator環境での設定 (開発時)
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            console.log('🔧 Emulator環境を検出 - Functions Emulatorに接続します');
+            functions.useEmulator('127.0.0.1', 5001);
+        }
+
         const loginContainer = document.getElementById('login-container');
         const mainContainer = document.getElementById('main-container');
         const contentArea = document.getElementById('content-area');

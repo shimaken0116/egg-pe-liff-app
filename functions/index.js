@@ -785,7 +785,7 @@ exports.saveRichMenu = onCall(FUNCTION_CONFIG, async (request) => {
         // 3. 新しいメニューをLINE上に作成
         logger.info("Creating new rich menu on LINE with data:", menuData);
         const createResponse = await lineClient.createRichMenu(menuData);
-        newRichMenuId = createResponse.richMenuId;
+        newRichMenuId = createResponse;
         logger.info(`Successfully created new rich menu on LINE. New ID: ${newRichMenuId}`);
 
 

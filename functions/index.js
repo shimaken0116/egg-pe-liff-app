@@ -234,10 +234,10 @@ exports.updateUserTags = onCall(
         tags: tags, // tagsはフロントエンドから配列で受け取る
       });
       logger.info(`Tags updated for user ${userId}`);
-      return { success: true, message: `Tags updated for user ${userId}.` };
+      return { success: true, message: `Successfully updated tags for user ${userId}` };
     } catch (error) {
-      logger.error(`Failed to update tags for user ${userId}`, error);
-      throw new functions.https.HttpsError("internal", "Failed to update tags.", error);
+      logger.error("Error updating user tags", error);
+      throw new functions.https.HttpsError("internal", "Failed to update tags.", error.message);
     }
   }
 );
@@ -530,18 +530,6 @@ exports.getUserDetails = onCall(
  * =================================================================
  */
 
-// LINEクライアントを初期化するヘルパー関数
-const getLineClient = () => {
-  const lineConfig = {
-    channelAccessToken: process.env.LINE_ACCESS_TOKEN,
-    channelSecret: process.env.LINE_CHANNEL_SECRET,
-  };
-  if (!lineConfig.channelAccessToken || !lineConfig.channelSecret) {
-    throw new functions.https.HttpsError("internal", "LINE APIの環境変数が設定されていません。");
-  }
-  return new line.Client(lineConfig);
-};
-
 /**
  * リッチメニューのリストを取得する
  */
@@ -562,7 +550,10 @@ exports.getRichMenuList = onCall(
     }
     try {
       logger.info("getRichMenuList: Initializing LINE client.");
-      const client = getLineClient();
+      const client = new line.Client({
+        channelAccessToken: process.env.LINE_ACCESS_TOKEN,
+        channelSecret: process.env.LINE_CHANNEL_SECRET,
+      });
       logger.info("getRichMenuList: Calling client.getRichMenuList()");
       const richMenus = await client.getRichMenuList();
       logger.info(`getRichMenuList: Successfully got ${richMenus.length} rich menus.`);
@@ -610,7 +601,10 @@ exports.createRichMenu = onCall(
       throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'richMenu' object.");
     }
     try {
-      const client = getLineClient();
+      const client = new line.Client({
+        channelAccessToken: process.env.LINE_ACCESS_TOKEN,
+        channelSecret: process.env.LINE_CHANNEL_SECRET,
+      });
       const richMenuId = await client.createRichMenu(richMenu);
       return { richMenuId };
     } catch (error) {
@@ -638,7 +632,10 @@ exports.deleteRichMenu = onCall(
       throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'richMenuId'.");
     }
     try {
-      const client = getLineClient();
+      const client = new line.Client({
+        channelAccessToken: process.env.LINE_ACCESS_TOKEN,
+        channelSecret: process.env.LINE_CHANNEL_SECRET,
+      });
       await client.deleteRichMenu(richMenuId);
       return { success: true };
     } catch (error) {
@@ -655,25 +652,34 @@ exports.uploadRichMenuImage = onCall(
   {
     region: "asia-northeast1",
     secrets: ["LINE_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"],
-    enforceAppCheck: false,
   },
   async (request) => {
     if (!request.auth) {
       throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
-    const { richMenuId, imageBase64, contentType } = request.data;
-    if (!richMenuId || !imageBase64 || !contentType) {
-      throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'richMenuId', 'imageBase64', and 'contentType'.");
+    const { richMenuId, image } = request.data;
+    if (!richMenuId || !image) {
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'richMenuId' and 'image' data.");
     }
+
     try {
-      const client = getLineClient();
-      // Base64からBufferに変換
-      const buffer = Buffer.from(imageBase64, 'base64');
-      await client.setRichMenuImage(richMenuId, buffer, contentType);
+      const lineConfig = {
+        channelAccessToken: process.env.LINE_ACCESS_TOKEN,
+        channelSecret: process.env.LINE_CHANNEL_SECRET,
+      };
+      const client = new line.Client(lineConfig);
+
+      // Base64エンコードされた画像データをBufferに変換
+      const buffer = Buffer.from(image, 'base64');
+
+      // 画像をアップロード
+      await client.setRichMenuImage(richMenuId, buffer);
+
       return { success: true };
+
     } catch (error) {
       logger.error(`Failed to upload image for rich menu ${richMenuId}`, error);
-      throw new functions.https.HttpsError("internal", "Failed to upload rich menu image.", error.originalError?.response?.data || error);
+      throw new functions.https.HttpsError("internal", "Failed to upload rich menu image.", error.message);
     }
   }
 );
@@ -702,7 +708,10 @@ exports.downloadRichMenuImage = onCall(
     }
     try {
       logger.info(`[v2] Attempting to get image for ${richMenuId}`);
-      const client = getLineClient();
+      const client = new line.Client({
+        channelAccessToken: process.env.LINE_ACCESS_TOKEN,
+        channelSecret: process.env.LINE_CHANNEL_SECRET,
+      });
       const stream = await client.getRichMenuImage(richMenuId);
       
       const chunks = [];
@@ -747,7 +756,10 @@ exports.getRichMenu = onCall(
       );
     }
     try {
-      const client = getLineClient();
+      const client = new line.Client({
+        channelAccessToken: process.env.LINE_ACCESS_TOKEN,
+        channelSecret: process.env.LINE_CHANNEL_SECRET,
+      });
       const richMenu = await client.getRichMenu(richMenuId);
       return { richMenu };
     } catch (error) {
@@ -759,6 +771,89 @@ exports.getRichMenu = onCall(
         "internal",
         `Failed to get rich menu ${richMenuId}.`
       );
+    }
+  }
+);
+
+/**
+ * 指定されたリッチメニューの詳細を取得する
+ */
+exports.getRichMenuDetails = onCall(
+  {
+    region: "asia-northeast1",
+    secrets: ["LINE_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"],
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    const { richMenuId } = request.data;
+    if (!richMenuId) {
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with a 'richMenuId'.");
+    }
+
+    try {
+      const lineConfig = {
+        channelAccessToken: process.env.LINE_ACCESS_TOKEN,
+        channelSecret: process.env.LINE_CHANNEL_SECRET,
+      };
+      const client = new line.Client(lineConfig);
+      const richMenu = await client.getRichMenu(richMenuId);
+      return { richMenu };
+    } catch (error) {
+      logger.error(`Failed to get rich menu details for ${richMenuId}`, error);
+      throw new functions.https.HttpsError("internal", "Failed to get rich menu details.", error.message);
+    }
+  }
+);
+
+/**
+ * リッチメニューを作成または更新する (Upsert)
+ */
+exports.upsertRichMenu = onCall(
+  {
+    region: "asia-northeast1",
+    secrets: ["LINE_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"],
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    const { richMenuId, richMenu } = request.data;
+    if (!richMenu) {
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with a 'richMenu' object.");
+    }
+
+    try {
+      const lineConfig = {
+        channelAccessToken: process.env.LINE_ACCESS_TOKEN,
+        channelSecret: process.env.LINE_CHANNEL_SECRET,
+      };
+      const client = new line.Client(lineConfig);
+
+      if (richMenuId) {
+        // Update: LINE Messaging APIには更新がないため、一度削除して再作成する
+        // まず既存のメニューを削除
+        try {
+            await client.deleteRichMenu(richMenuId);
+        } catch(error) {
+            // 404 (Not Found) は、すでに削除されている可能性があるので無視する
+            if (error.statusCode !== 404) {
+                throw error;
+            }
+        }
+        // 新しい定義で作成
+        const newRichMenuId = await client.createRichMenu(richMenu);
+        return { richMenuId: newRichMenuId };
+
+      } else {
+        // Create
+        const newRichMenuId = await client.createRichMenu(richMenu);
+        return { richMenuId: newRichMenuId };
+      }
+    } catch (error) {
+      logger.error(`Failed to upsert rich menu ${richMenuId || ''}`, error);
+      throw new functions.https.HttpsError("internal", "Failed to save rich menu.", error.message);
     }
   }
 ); 

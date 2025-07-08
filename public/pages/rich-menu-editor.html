@@ -1,96 +1,69 @@
 <!-- Rich Menu Editor/Builder Page -->
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-  <h1 class="h2" id="editor-title">リッチメニューエディタ</h1>
-  <div class="btn-toolbar mb-2 mb-md-0">
-    <button type="button" class="btn btn-secondary me-2" id="backToRichMenuListButton">
-      <span data-feather="arrow-left"></span>
-      一覧に戻る
-    </button>
-    <button type="button" class="btn btn-primary" id="saveRichMenuButton">
-      <span data-feather="save"></span>
-      保存
-    </button>
-  </div>
-</div>
-
-<div class="row">
-  <!-- Left Panel: Editor Settings -->
-  <div class="col-md-4">
-    <h4>設定</h4>
-    <form id="richMenuSettingsForm">
-      <div class="mb-3">
-        <label for="richMenuName" class="form-label">リッチメニュー名</label>
-        <input type="text" class="form-control" id="richMenuName" placeholder="例: 通常メニュー" required>
-      </div>
-      <div class="mb-3">
-        <label for="chatBarText" class="form-label">チャットバーのテキスト</label>
-        <input type="text" class="form-control" id="chatBarText" placeholder="例: メニュー" required>
-      </div>
-      <div class="mb-3">
-        <label for="richMenuImageUpload" class="form-label">背景画像</label>
-        <input class="form-control" type="file" id="richMenuImageUpload" accept="image/jpeg, image/png">
-      </div>
-    </form>
-    <hr>
-    <h4>タップ領域</h4>
-    <div id="tappable-areas-list">
-      <!-- Tappable areas will be listed here -->
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2" id="rich-menu-editor-title">リッチメニューの新規作成</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <button type="button" class="btn btn-secondary" id="backToRichMenuListButton">
+                一覧に戻る
+            </button>
+        </div>
     </div>
-     <button class="btn btn-success btn-sm mt-2" id="add-area-button">
-        <span data-feather="plus-circle"></span> エリアを追加
-    </button>
-  </div>
 
-  <!-- Right Panel: Visual Editor -->
-  <div class="col-md-8">
-    <h4>プレビュー</h4>
-    <div id="rich-menu-editor-container" style="position: relative; width: 100%; max-width: 800px; border: 1px solid #ccc; background-color: #f8f9fa; overflow: hidden;">
-       <img id="rich-menu-image-preview" src="" style="width: 100%; display: block;" />
-       <!-- Tappable areas will be rendered here -->
+    <!-- Loading Spinner -->
+    <div id="editor-loading-spinner" class="text-center my-5" style="display: none;">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2">リッチメニューの情報を読み込んでいます...</p>
     </div>
-  </div>
-</div>
 
-<!-- Modal for editing tappable area action -->
-<div class="modal fade" id="actionEditorModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">アクションを編集</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="editingAreaId">
+    <!-- Main Form -->
+    <form id="richMenuForm" style="display: none;">
+        <!-- Rich Menu Name -->
         <div class="mb-3">
-          <label for="actionType" class="form-label">アクション種別</label>
-          <select class="form-select" id="actionType">
-            <option value="uri">URLを開く</option>
-            <option value="message">テキストを送信</option>
-            <option value="postback">ポストバックイベント</option>
-          </select>
+            <label for="richMenuName" class="form-label">リッチメニュー名</label>
+            <input type="text" class="form-control" id="richMenuName" placeholder="例: 通常メニュー" required>
+            <div class="form-text">管理画面上でのみ表示される名前です。</div>
         </div>
-        <div id="action-fields">
-          <!-- Fields for specific action types will be injected here -->
+
+        <!-- Rich Menu Chat Bar Text -->
+        <div class="mb-3">
+            <label for="chatBarText" class="form-label">チャットバーテキスト</label>
+            <input type="text" class="form-control" id="chatBarText" placeholder="例: メニュー" required>
+            <div class="form-text">LINEのトーク画面下部に表示されるテキストです。</div>
         </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-        <button type="button" class="btn btn-primary" id="save-action-button">保存</button>
-      </div>
-    </div>
-  </div>
-</div>
 
-<script type="module">
-  import { init } from '/js/pages/rich-menu-editor.js';
-  
-  // Get params from the main script's context if available, or from URL
-  const urlParams = new URLSearchParams(window.location.search);
-  const richMenuId = urlParams.get('richMenuId'); // This needs to be passed correctly
-  
-  // This is a bit of a workaround. Ideally admin.js would pass params.
-  // We'll retrieve it from the context it was loaded from.
-  const pageParams = window.currentPageParams || {};
+        <!-- Rich Menu JSON Definition -->
+        <div class="mb-3">
+            <label for="richMenuJson" class="form-label">リッチメニュー定義 (JSON)</label>
+            <p class="form-text">
+                LINEの<a href="https://developers.line.biz/ja/reference/messaging-api/#rich-menu-object" target="_blank">リッチメニューオブジェクト</a>の仕様に従ってJSONを編集してください。<br>
+                名前とチャットバーテキストは上のフォームで設定されるため、このJSONからは除外されます。主に `areas` を編集します。
+            </p>
+            <textarea class="form-control" id="richMenuJson" rows="18" required></textarea>
+        </div>
 
-  init(pageParams);
-</script> 
+        <!-- Rich Menu Image -->
+        <div class="mb-3">
+            <label for="richMenuImage" class="form-label">背景画像</label>
+            <p class="form-text">対応形式: JPEGまたはPNG。サイズ: 2500x1686または2500x843。最大ファイルサイズ: 1MB。</p>
+            <input class="form-control" type="file" id="richMenuImage" accept="image/jpeg, image/png">
+            <div class="mt-2">
+                <p>現在の画像:</p>
+                <img id="currentRichMenuImage" src="" alt="現在の背景画像" class="img-fluid" style="max-width: 300px; display: none;">
+                <p id="noRichMenuImage" class="text-muted" style="display: none;">画像が設定されていません。</p>
+            </div>
+        </div>
+        
+        <hr class="my-4">
+
+        <!-- Action Buttons -->
+        <div class="d-flex justify-content-between">
+            <div>
+                <button type="submit" class="btn btn-primary" id="saveRichMenuButton">保存</button>
+                <span id="save-result" class="ms-3"></span>
+            </div>
+            <button type="button" class="btn btn-danger" id="deleteRichMenuButton" style="display: none;">このリッチメニューを削除</button>
+        </div>
+    </form>
+</div> 

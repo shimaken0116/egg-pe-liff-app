@@ -750,10 +750,17 @@ exports.saveRichMenu = onCall(FUNCTION_CONFIG, async (request) => {
 
     try {
         let newRichMenuId;
+        let originalImageBase64 = null;
 
         if (existingMenuId) {
             // 既存メニューの更新フロー
             logger.info(`Updating existing rich menu. Old ID: ${existingMenuId}`);
+
+            // If no new image is provided, we must fetch the old one to re-apply it.
+            if (!imageBase64) {
+                logger.info(`No new image provided for ${existingMenuId}. Fetching original image.`);
+                originalImageBase64 = await lineClient.downloadRichMenuImage(existingMenuId);
+            }
 
             // 1. LINE上から古いメニューを削除 (存在すれば)
             try {
@@ -788,9 +795,12 @@ exports.saveRichMenu = onCall(FUNCTION_CONFIG, async (request) => {
         }
 
         // 4. 画像が提供されていればアップロード
-        if (imageBase64) {
+        const imageToUpload = imageBase64 || originalImageBase64;
+        const finalImageType = imageBase64 ? imageType : 'image/png'; // Assume png for re-uploaded images
+
+        if (imageToUpload) {
             logger.info(`Uploading image to new rich menu ID: ${newRichMenuId}`);
-            await lineClient.uploadRichMenuImage(newRichMenuId, imageBase64, imageType);
+            await lineClient.uploadRichMenuImage(newRichMenuId, imageToUpload, finalImageType);
             logger.info(`Successfully uploaded image for rich menu: ${newRichMenuId}`);
         }
 
@@ -801,7 +811,7 @@ exports.saveRichMenu = onCall(FUNCTION_CONFIG, async (request) => {
             tags: menuData.tags || [],
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            hasImage: !!imageBase64,
+            hasImage: !!(imageToUpload),
         };
         await db.collection("richMenus").doc(newRichMenuId).set(newMenuDoc);
         logger.info(`Successfully saved rich menu to Firestore. ID: ${newRichMenuId}`);
